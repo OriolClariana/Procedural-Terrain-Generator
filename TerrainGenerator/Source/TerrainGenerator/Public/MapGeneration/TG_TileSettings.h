@@ -19,17 +19,17 @@ struct FTileSettings {
     bool TileCentred = true;
 
   UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "TileSettings", meta = (ClampMin = "1.0"))
-    float TileSize = 1000.f;
+    float TileSize = 10000.f;
   UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "TileSettings")
     TerrainSizeIn TileScaleIn = TerrainSizeIn::TerrainSizeIn_CM;
 
   UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "TileSettings", meta = (ClampMin = "1.0"))
-    float LevelOfDetail = 10.f;
+    float LevelOfDetail = 50.f;
   UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "TileSettings")
     TerrainSizeIn LODScale = TerrainSizeIn::TerrainSizeIn_CM;
 
   UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "TileSettings", meta = (ClampMin = "1.0"))
-    float HeightRange = 100.f;
+    float HeightRange = 3000.f;
   UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "TileSettings")
     TerrainSizeIn HeightScale = TerrainSizeIn::TerrainSizeIn_CM;
 

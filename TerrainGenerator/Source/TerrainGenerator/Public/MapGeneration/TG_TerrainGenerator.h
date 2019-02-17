@@ -56,13 +56,13 @@ public:
     int numberOfTilesY = 3;
 
   UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "TerrainGenerator")
-    int Seed = 0;
+    int Seed = 12345;
   UPROPERTY(EditAnywhere, Category = "TerrainGenerator", meta = (ClampMin = "1"))
     double Amplitude = 1;
   UPROPERTY(EditAnywhere, Category = "TerrainGenerator", meta = (ClampMin = "0.0", ClampMax = "0.01"))
-    double Frequency = 0.005;
+    double Frequency = 0.0001;
   UPROPERTY(EditAnywhere, Category = "TerrainGenerator")
-    int Octaves = 1;
+    int Octaves = 8;
 
   // Settings of the Tile
   UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "TerrainGenerator|Tile")
