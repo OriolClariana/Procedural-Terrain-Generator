@@ -5,12 +5,15 @@
 #include "TG_Tile.h"
 #include "TG_TileSettings.h"
 
+/* Algorithms */
+#include "TG_PerlinNoise.h"
+
 #include "CoreMinimal.h"
-#include "GameFramework/Actor.h"
+#include "GameFramework/Info.h"
 #include "TG_TerrainGenerator.generated.h"
 
-UCLASS()
-class TERRAINGENERATOR_API ATG_TerrainGenerator : public AActor
+UCLASS(Blueprintable)
+class TERRAINGENERATOR_API ATG_TerrainGenerator : public AInfo
 {
 	GENERATED_BODY()
 	
@@ -26,10 +29,58 @@ public:
     void CreateTerrain();
 
   UFUNCTION()
+    void UpdateTerrain();
+
+  UFUNCTION()
     void DestroyTerrain();
+
+  /* Algorithms Functions */
+  UFUNCTION()
+    void InitAlgorithm();
+
+  UFUNCTION()
+    double GetAlgorithmValue(double x, double y);
 
   /*
    CONFIGURABLE VARIABLES
+  */
+  // Tile to Create
+  UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "TerrainGenerator")
+    TSubclassOf<ATG_Tile> tileToCreate;
+
+  // Tile to Create in X axis
+  UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "TerrainGenerator", meta = (ClampMin = "1.0"))
+    int numberOfTilesX = 3;
+  // Tile to Create in Y axis
+  UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "TerrainGenerator", meta = (ClampMin = "1.0"))
+    int numberOfTilesY = 3;
+
+  UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "TerrainGenerator")
+    int Seed = 0;
+  UPROPERTY(EditAnywhere, Category = "TerrainGenerator", meta = (ClampMin = "1"))
+    double Amplitude = 1;
+  UPROPERTY(EditAnywhere, Category = "TerrainGenerator", meta = (ClampMin = "0.0", ClampMax = "0.01"))
+    double Frequency = 0.005;
+  UPROPERTY(EditAnywhere, Category = "TerrainGenerator")
+    int Octaves = 1;
+
+  // Settings of the Tile
+  UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "TerrainGenerator|Tile")
+    FTileSettings tileSettings;
+
+  // List of the Tiles Created
+  UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "TerrainGenerator|Tile|Lists")
+    TArray<ATG_Tile*> TilesList;
+
+  /*
+    PATHS FOR EDITOR
+  */
+  // List of the Tiles Created
+  UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "TerrainGenerator|Paths")
+    FName TilePath = TEXT("Tiles");
+
+  /*
+    PRE BACK OPTION
   */
   // Bool to generate the world in Editor Mode
   UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "TerrainGenerator|Editor")
@@ -38,26 +89,8 @@ public:
   UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "TerrainGenerator|Editor")
     bool DestroyWorld = false;
 
-  // Tile to Create
-  UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "TerrainGenerator")
-    TSubclassOf<ATG_Tile> tileToCreate = LoadClass<ATG_Tile>(NULL, TEXT("Blueprint'/Game/MapGeneration/TerrainGenerator.TG_TerrainGenerator_C'"), NULL, LOAD_None, NULL);
-
-  // Tile to Create in X axis
-  UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "TerrainGenerator")
-    int numberOfTilesX = 3;
-  // Tile to Create in Y axis
-  UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "TerrainGenerator")
-    int numberOfTilesY = 3;
-
-  // Settings of the Tile
-  UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "TerrainGenerator")
-    FTileSettings tileSettings;
-
-  // List of the Tiles Created
-  UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "TerrainGenerator")
-    TArray<ATG_Tile*> TilesList;
-
 protected:
+  TG_PerlinNoise perlinNoise;
 
 private:
 	

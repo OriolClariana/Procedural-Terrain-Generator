@@ -55,27 +55,42 @@ void ATG_TerrainGenerator::PostEditChangeProperty(struct FPropertyChangedEvent& 
 void ATG_TerrainGenerator::CreateTerrain()
 {
   UE_LOG(LogTerrainGenerator, Log, TEXT("Create the Terrain"));
+  
+  // Init the tileArray Size
+  tileSettings.Init();
 
-  // Temporal
-  tileSettings.ArrayLineSize = (tileSettings.TileSize / tileSettings.AlgorithmResolution) + 1;
-  tileSettings.ArraySize = tileSettings.ArrayLineSize * tileSettings.ArrayLineSize;
+  // Initialize the Algorithm selected
+  InitAlgorithm();
 
-  //Loop
-  for (int x = 0; x < numberOfTilesX; ++x) {
-    for (int y = 0; y < numberOfTilesY; ++y) {
-      // Create new Tile
-      ATG_Tile* newTile = GetWorld()->SpawnActor<ATG_Tile>(tileToCreate, FVector::ZeroVector, FRotator::ZeroRotator);
+  // If Tile exists
+  if (tileToCreate) {
+    //Loop
+    for (int x = -numberOfTilesX / 2; x <= (numberOfTilesX / 2); ++x) {
+      for (int y = -(numberOfTilesY/2); y <= (numberOfTilesY/2); ++y) {
+        // Create new Tile
+        ATG_Tile* newTile = GetWorld()->SpawnActor<ATG_Tile>(tileToCreate, FVector::ZeroVector, FRotator::ZeroRotator);
 
-      // ID
-      int newTileId = TilesList.Num();
+#if WITH_EDITOR
+        if (TilePath != TEXT("")) {
+          newTile->SetFolderPath(TilePath);
+        }
+#endif
 
-      // Initialize the Tile
-      newTile->Init(newTileId, x, y, tileSettings);
+        // ID
+        int newTileId = TilesList.Num();
 
-      // Save the Tile
-      TilesList.Add(newTile);
+        // Initialize the Tile
+        newTile->Init(newTileId, x, y, tileSettings, this);
+
+        // Save the Tile
+        TilesList.Add(newTile);
+      }
     }
   }
+}
+
+void ATG_TerrainGenerator::UpdateTerrain() {
+  UE_LOG(LogTerrainGenerator, Log, TEXT("Update the Terrain Tiles"));
 
 }
 
@@ -90,4 +105,26 @@ void ATG_TerrainGenerator::DestroyTerrain()
     }
     TilesList.Empty();
   }
+}
+
+
+void ATG_TerrainGenerator::InitAlgorithm() {
+
+  if (Seed == 0) {
+    Seed = FMath::Rand();
+  }
+  perlinNoise.setNoiseSeed(Seed);
+
+}
+
+
+double ATG_TerrainGenerator::GetAlgorithmValue(double x, double y) {
+  double value = 0.0;
+
+  value += perlinNoise.octaveNoise0_1(Frequency * x, Frequency * y, Octaves);
+  
+  //Apply the Amplitud to the results
+  value *= Amplitude;
+
+  return value;
 }
