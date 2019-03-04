@@ -14,7 +14,10 @@ void ATG_TerrainGenerator::BeginPlay()
 {
 	Super::BeginPlay();
 	
-  CreateTerrain();
+  if (useRuntime)
+  {
+    CreateTerrain();
+  }
 }
 
 void ATG_TerrainGenerator::Tick(float DeltaTime)
@@ -22,6 +25,23 @@ void ATG_TerrainGenerator::Tick(float DeltaTime)
 	Super::Tick(DeltaTime);
 
 }
+
+#if WITH_EDITOR
+void ATG_TerrainGenerator::OnConstruction(const FTransform & Transform)
+{
+  TArray<AActor*> actors;
+
+  UGameplayStatics::GetAllActorsOfClass(GetWorld(), ATG_TerrainGenerator::StaticClass(), actors);
+
+  if (actors.Num() > 1)
+  {
+    Destroy();
+    DestroyConstructedComponents();
+    GEngine->ForceGarbageCollection(true);
+    FMessageDialog::Debugf(FText::FromString("Already exist a TerrainGenerator Object"));
+  }
+}
+#endif
 
 /* If MyBool belongs to the ASomeActor */
 #if WITH_EDITOR
@@ -31,13 +51,32 @@ void ATG_TerrainGenerator::PostEditChangeProperty(struct FPropertyChangedEvent& 
 
   FName PropertyName = (e.Property != NULL) ? e.Property->GetFName() : NAME_None;
 
-  // Pre Bake World
-  if (PropertyName == GET_MEMBER_NAME_CHECKED(ATG_TerrainGenerator, PreBakeWorld)) {
+  // Runtime Bool
+  if (PropertyName == GET_MEMBER_NAME_CHECKED(ATG_TerrainGenerator, useRuntime)) {
+    if (useRuntime) {
+      usePreBake = false;
+    }
+  }
+  // PreBake Bool
+  if (PropertyName == GET_MEMBER_NAME_CHECKED(ATG_TerrainGenerator, usePreBake)) {
+    if (usePreBake) {
+      useRuntime = false;
+    }
+  }
+
+  // Create World
+  if (PropertyName == GET_MEMBER_NAME_CHECKED(ATG_TerrainGenerator, CreateWorld)) {
     /* If the Bool is pressed we call Create Terrain */
-    if (PreBakeWorld) {
-      PreBakeWorld = !PreBakeWorld;
-      DestroyTerrain();
-      CreateTerrain();
+    if (CreateWorld) {
+      CreateWorld = !CreateWorld;
+
+      if (false == generated)
+      {
+        CreateTerrain();
+      }
+      else {
+        UpdateTerrain();
+      }
     }
   }
 
@@ -62,36 +101,46 @@ void ATG_TerrainGenerator::CreateTerrain()
   // Initialize the Algorithm selected
   InitAlgorithm();
 
-  // If Tile exists
-  if (tileToCreate) {
-    //Loop
-    for (int x = -numberOfTilesX / 2; x <= (numberOfTilesX / 2); ++x) {
-      for (int y = -(numberOfTilesY/2); y <= (numberOfTilesY/2); ++y) {
-        // Create new Tile
-        ATG_Tile* newTile = GetWorld()->SpawnActor<ATG_Tile>(tileToCreate, FVector::ZeroVector, FRotator::ZeroRotator);
+  //Loop
+  for (int x = -numberOfTilesX / 2; x <= (numberOfTilesX / 2); ++x) {
+    for (int y = -(numberOfTilesY / 2); y <= (numberOfTilesY / 2); ++y) {
+
+      // Create new Tile
+      ATG_Tile* tile = GetWorld()->SpawnActor<ATG_Tile>(FVector::ZeroVector, FRotator::ZeroRotator);
 
 #if WITH_EDITOR
-        if (TilePath != TEXT("")) {
-          newTile->SetFolderPath(TilePath);
-        }
+      if (TilePath != TEXT("")) {
+        tile->SetFolderPath(TilePath);
+      }
 #endif
 
-        // ID
-        int newTileId = TilesList.Num();
+      // ID
+      int newTileId = TilesList.Num();
 
-        // Initialize the Tile
-        newTile->Init(newTileId, x, y, tileSettings, this);
+      // Initialize the Tile
+      tile->Init(newTileId, x, y, tileSettings, this);
 
-        // Save the Tile
-        TilesList.Add(newTile);
-      }
+      // Save the Tile
+      TilesList.Add(tile);
     }
   }
+
+  generated = true;
 }
 
 void ATG_TerrainGenerator::UpdateTerrain() {
-  UE_LOG(LogTerrainGenerator, Log, TEXT("Update the Terrain Tiles"));
+  UE_LOG(LogTerrainGenerator, Log, TEXT("Update the Terrain"));
 
+  // Init the tileArray Size
+  tileSettings.Init();
+
+  // Initialize the Algorithm selected
+  InitAlgorithm();
+
+  for (ATG_Tile* tile : TilesList) {
+    // Initialize the Tile
+    tile->Init(tile->TileID, tile->TileX, tile->TileY, tileSettings, this);
+  }
 }
 
 void ATG_TerrainGenerator::DestroyTerrain()
@@ -105,6 +154,8 @@ void ATG_TerrainGenerator::DestroyTerrain()
     }
     TilesList.Empty();
   }
+
+  generated = false;
 }
 
 

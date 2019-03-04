@@ -33,21 +33,25 @@ struct FTileSettings {
   UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "TileSettings")
     TerrainSizeIn HeightScale = TerrainSizeIn::TerrainSizeIn_CM;
 
+  /* Recommended to be equal to LevelOfDetail */
   UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "TileSettings", meta = (ClampMin = "1.0"))
-    float TextureScale = 1.f;
-  UPROPERTY(EditAnywhere, AdvancedDisplay, Category = Rendering, Meta = (ToolTip = "Material overrides."))
-    UMaterialInterface* Material = UMaterial::GetDefaultMaterial(MD_Surface);
+    float TextureScale = 50.f;
 
   UPROPERTY(VisibleAnywhere, BlueprintReadWrite, Category = "TileSettings")
     int ArrayLineSize = 0;
   UPROPERTY(VisibleAnywhere, BlueprintReadWrite, Category = "TileSettings")
     int ArraySize = 0;
-
+  
   /* FUNCTIONS */
   /* Constructor */
   void Init() {
     ArrayLineSize = (getTileSize() / getLOD()) + 1;
-    ArraySize = ArrayLineSize * ArrayLineSize;
+    ArraySize = (ArrayLineSize * ArrayLineSize);
+  }
+
+  /* Get the ArrayLineSize value */
+  int getArrayLineSize() {
+    return ArrayLineSize;
   }
 
   /* Get the tileSize with the correct measure */

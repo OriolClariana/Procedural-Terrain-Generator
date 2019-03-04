@@ -27,7 +27,7 @@ public:
     void Init(int tileID, int coordX, int coordY, FTileSettings tSettings, ATG_TerrainGenerator* manager);
 
   UFUNCTION()
-    void Update();
+    void Update(int coordX, int coordY);
 
   /* GETTER */
   UFUNCTION()
@@ -67,6 +67,9 @@ public:
   UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Tile")
     URuntimeMeshComponent* RuntimeMesh;
 
+  UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Tile")
+    UStaticMeshComponent* waterComponent;
+
 protected:
   /* Initialize all the Mesh values to DEFAULT value */
   UFUNCTION()
@@ -81,6 +84,13 @@ protected:
   /* Generate the Mesh with the values modified in other functions */
   UFUNCTION()
     void GenerateMesh();
+
+  /* Update the Mesh with the values modified in other functions */
+  UFUNCTION()
+    void UpdateMesh();
+
+  UFUNCTION()
+    void SetupWater();
 
 private:
   UPROPERTY()
