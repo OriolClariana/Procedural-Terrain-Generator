@@ -174,8 +174,7 @@ void ATG_Tile::SetupWater()
   waterComponent->SetStaticMesh(TerrainGenerator->water);
 
   // Height of the Water
-  float heightMap = tileSettings.getTerrainScaleValue(tileSettings.HeightScale);
-  float waterHeightPos = TerrainGenerator->waterHeight * heightMap;
+  float waterHeightPos = TerrainGenerator->waterHeight * tileSettings.getHeightRange();
   FVector waterPos = FVector(tileSettings.getTileSize() / 2, tileSettings.getTileSize() / 2, waterHeightPos);
   waterComponent->SetRelativeLocation(waterPos);
 
