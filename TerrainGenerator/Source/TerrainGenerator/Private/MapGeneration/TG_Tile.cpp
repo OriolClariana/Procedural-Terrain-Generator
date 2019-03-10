@@ -8,9 +8,15 @@ DEFINE_LOG_CATEGORY_STATIC(LogTile, Log, All);
 // Sets default values
 ATG_Tile::ATG_Tile()
 {
-  RuntimeMesh = CreateDefaultSubobject<URuntimeMeshComponent>(TEXT("RuntimeMeshC"));
-  RootComponent = RuntimeMesh;
+  // Root
+  USceneComponent* root = CreateDefaultSubobject<USceneComponent>(TEXT("Root"));
+  RootComponent = root;
 
+  // Terrain
+  RuntimeMesh = CreateDefaultSubobject<URuntimeMeshComponent>(TEXT("RuntimeMeshC"));
+  RuntimeMesh->SetupAttachment(RootComponent);
+
+  // Water
   waterComponent = CreateDefaultSubobject<UStaticMeshComponent>(TEXT("WaterC"));
   waterComponent->SetupAttachment(RootComponent);
 }
@@ -75,17 +81,22 @@ void ATG_Tile::InitMeshToCreate()
   MeshToCreate.UV.Init(FVector2D(0, 0), tileSettings.ArraySize);
   MeshToCreate.VertexColors.Init(FColor::White, tileSettings.ArraySize);
   int QuadSize = 6;
-  int NumberOfQuadsPerLine =  tileSettings.getArrayLineSize() - 1;
+  int NumberOfQuadsPerLine =  tileSettings.getArrayLineSize();
   int TrianglesArraySize = NumberOfQuadsPerLine * NumberOfQuadsPerLine * QuadSize;
   MeshToCreate.Triangles.Init(0, TrianglesArraySize);
+
+  // Position of the Terrain
+  FVector position = FVector(tileSettings.getTileSize() / 2, tileSettings.getTileSize() / 2, 0.f);
+  RuntimeMesh->SetRelativeLocation(position * -1);
 }
 
 void ATG_Tile::GenerateVertices()
 {
   UE_LOG(LogTile, Log, TEXT("Generating Vertices for Tile ID [%d]"), TileID);
-  
-  for (int y = 0; y < tileSettings.getArrayLineSize(); y++) {
-    for (int x = 0; x < tileSettings.getArrayLineSize(); x++) {
+
+  int NumberOfQuadsPerLine = tileSettings.getArrayLineSize();
+  for (int y = 0; y < NumberOfQuadsPerLine; y++) {
+    for (int x = 0; x < NumberOfQuadsPerLine; x++) {
       FVector2D Position = GetVerticePosition(x, y);
 
       double AlgorithmZ = GetNoiseValueForGridCoordinates(Position.X, Position.Y);
@@ -162,7 +173,7 @@ void ATG_Tile::UpdateMesh()
 
 void ATG_Tile::SetupWater()
 {
-  // If not use the water hidde plane and disable collision JUST IN CASE
+  // If not use the water hide plane and disable collision JUST IN CASE
   if (false == TerrainGenerator->useWater)
   {
     waterComponent->SetHiddenInGame(true);
@@ -173,15 +184,19 @@ void ATG_Tile::SetupWater()
   // Set the mesh to use
   waterComponent->SetStaticMesh(TerrainGenerator->water);
 
+  // Set the material for the water
+  waterComponent->SetMaterial(0, TerrainGenerator->waterMaterial);
+
   // Height of the Water
   float waterHeightPos = TerrainGenerator->waterHeight * tileSettings.getHeightRange();
-  FVector waterPos = FVector(tileSettings.getTileSize() / 2, tileSettings.getTileSize() / 2, waterHeightPos);
+  FVector waterPos = FVector(0.f, 0.f, waterHeightPos);
   waterComponent->SetRelativeLocation(waterPos);
 
   // Scale of the Water
-  //FVector scale = TerrainGenerator->water->GetBounds().GetBox().GetSize();
-  float waterPlaneScale = tileSettings.getTileSize() / 1500.f;
-  waterComponent->SetRelativeScale3D(FVector(waterPlaneScale, waterPlaneScale, 1));
+  FVector scale = waterComponent->CalcBounds(waterComponent->GetRelativeTransform()).BoxExtent;
+  float waterPlaneScaleX = (tileSettings.getTileSize() / scale.X) / 2.f;
+  float waterPlaneScaleY = (tileSettings.getTileSize() / scale.Y) / 2.f;
+  waterComponent->SetRelativeScale3D(FVector(waterPlaneScaleX, waterPlaneScaleY, 1.f));
 
 }
 

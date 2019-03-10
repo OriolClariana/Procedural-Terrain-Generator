@@ -43,7 +43,6 @@ void ATG_TerrainGenerator::OnConstruction(const FTransform & Transform)
 }
 #endif
 
-/* If MyBool belongs to the ASomeActor */
 #if WITH_EDITOR
 void ATG_TerrainGenerator::PostEditChangeProperty(struct FPropertyChangedEvent& e)
 {
@@ -102,7 +101,7 @@ void ATG_TerrainGenerator::CreateTerrain()
   InitAlgorithm();
 
   //Loop
-  for (int x = -numberOfTilesX / 2; x <= (numberOfTilesX / 2); ++x) {
+  for (int x = -(numberOfTilesX / 2); x <= (numberOfTilesX / 2); ++x) {
     for (int y = -(numberOfTilesY / 2); y <= (numberOfTilesY / 2); ++y) {
 
       // Create new Tile
@@ -174,7 +173,7 @@ double ATG_TerrainGenerator::GetAlgorithmValue(double x, double y) {
 
   value += perlinNoise.octaveNoise0_1(Frequency * x, Frequency * y, Octaves);
   
-  //Apply the Amplitud to the results
+  //Apply the Amplitude to the results
   value *= Amplitude;
 
   return value;

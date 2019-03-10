@@ -45,7 +45,7 @@ struct FTileSettings {
   /* FUNCTIONS */
   /* Constructor */
   void Init() {
-    ArrayLineSize = (getTileSize() / getLOD()) + 1;
+    ArrayLineSize = (getTileSize() / getLOD() + 1);
     ArraySize = (ArrayLineSize * ArrayLineSize);
   }
 

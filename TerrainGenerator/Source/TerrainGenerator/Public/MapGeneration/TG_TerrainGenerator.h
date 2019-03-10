@@ -87,6 +87,9 @@ public:
   UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "TerrainGenerator|Biomes|Water")
     UStaticMesh* water;
 
+  UPROPERTY(EditAnywhere, AdvancedDisplay, Category = "TerrainGenerator|Biomes|Water", Meta = (ToolTip = "Material overrides."))
+    UMaterialInterface* waterMaterial = UMaterial::GetDefaultMaterial(MD_Surface);
+
   /* Water Level position with respect to HeightRange */
   UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "TerrainGenerator|Biomes|Water", meta = (ClampMin = "0.0", ClampMax = "1.0", UIMin = "0.0", UIMax = "1.0"))
     float waterHeight = 0.4f;
