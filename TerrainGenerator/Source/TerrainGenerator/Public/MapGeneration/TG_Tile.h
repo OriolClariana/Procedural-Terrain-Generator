@@ -89,8 +89,12 @@ protected:
   UFUNCTION()
     void UpdateMesh();
 
+  /* Setup the Water settings*/
   UFUNCTION()
     void SetupWater();
+  
+  UFUNCTION()
+    void SetupBiomes();
 
 private:
   UPROPERTY()

@@ -40,6 +40,8 @@ void ATG_Tile::Init(int tileID, int coordX, int coordY, FTileSettings tSettings,
   TileY = coordY;
   tileSettings = tSettings;
 
+  // Set Water
+  SetupWater();
 
   // Initialize the values to default
   InitMeshToCreate();
@@ -48,11 +50,11 @@ void ATG_Tile::Init(int tileID, int coordX, int coordY, FTileSettings tSettings,
   GenerateTriangles();
   GenerateVertices();
 
+  // Setyo the Biomes
+  SetupBiomes();
+
   if (Generated == false)
   {
-	// Set Water
-	SetupWater();
-
     // Create the Mesh
     GenerateMesh();
   }
@@ -80,7 +82,7 @@ void ATG_Tile::InitMeshToCreate()
   MeshToCreate.Normals.Init(FVector(0, 0, 1), tileSettings.ArraySize);
   MeshToCreate.Tangents.Init(FRuntimeMeshTangent(0, -1, 0), tileSettings.ArraySize);
   MeshToCreate.UV.Init(FVector2D(0, 0), tileSettings.ArraySize);
-  MeshToCreate.VertexColors.Init(FColor::White, tileSettings.ArraySize);
+  MeshToCreate.VertexColors.Init(FColor::Green, tileSettings.ArraySize);
   int QuadSize = 6;
   int NumberOfQuadsPerLine =  tileSettings.getArrayLineSize();
   int TrianglesArraySize = NumberOfQuadsPerLine * NumberOfQuadsPerLine * QuadSize;
@@ -132,14 +134,6 @@ void ATG_Tile::GenerateTriangles()
       MeshToCreate.Triangles[TIndex + 3] = botLeft;
       MeshToCreate.Triangles[TIndex + 4] = topRight;
       MeshToCreate.Triangles[TIndex + 5] = botRight;
-
-      FVector FirstEdgeVector = MeshToCreate.Vertices[topLeft] - MeshToCreate.Vertices[botLeft]; // Line between bottom and top of triangle
-      FVector SecondEdgeVector = MeshToCreate.Vertices[topRight] - MeshToCreate.Vertices[botLeft]; // Line between bottom and right of triangle
-      FVector NormalVector = FVector::CrossProduct(FirstEdgeVector, SecondEdgeVector) * -1;
-      NormalVector.Normalize();
-      SecondEdgeVector.Normalize();
-      MeshToCreate.Normals[QIndex] = NormalVector;
-      MeshToCreate.Tangents[QIndex] = SecondEdgeVector;
     }
   }
 }
@@ -147,22 +141,8 @@ void ATG_Tile::GenerateTriangles()
 void ATG_Tile::GenerateMesh()
 {
   UE_LOG(LogTile, Log, TEXT("Generating mesh for Tile ID [%d]"), TileID);
-  //RuntimeMesh->SetMaterial(TileID, TerrainGenerator->defaultMaterial);
-
-  for (int i = 0; i < RuntimeMesh->GetNumSections(); i++) {
-	TUniquePtr<FRuntimeMeshScopedUpdater> meshSection = RuntimeMesh->GetSectionReadonly(i);
-	FVector sectionPosition = meshSection->GetPosition(0);
-
-	if (sectionPosition.Z > 0.5f) {
-	  UMaterialInterface* material = UMaterial::GetDefaultMaterial(MD_Surface);
-	  RuntimeMesh->SetSectionMaterial(i, material);
-	}
-	else {
-		RuntimeMesh->SetSectionMaterial(i, TerrainGenerator->defaultMaterial);
-	}
-  }
-
-
+  RuntimeMesh->SetMaterial(TileID, TerrainGenerator->defaultMaterial);
+  
   RuntimeMesh->CreateMeshSection(TileID,
     MeshToCreate.Vertices,
     MeshToCreate.Triangles,
@@ -170,7 +150,9 @@ void ATG_Tile::GenerateMesh()
     MeshToCreate.UV,
     MeshToCreate.VertexColors,
     MeshToCreate.Tangents,
-    true, EUpdateFrequency::Infrequent);
+    true,
+    EUpdateFrequency::Infrequent,
+    ESectionUpdateFlags::CalculateNormalTangent);
 }
 
 void ATG_Tile::UpdateMesh()
@@ -184,7 +166,7 @@ void ATG_Tile::UpdateMesh()
     MeshToCreate.UV,
     MeshToCreate.VertexColors,
     MeshToCreate.Tangents,
-    ESectionUpdateFlags::None);
+    ESectionUpdateFlags::CalculateNormalTangent);
 }
 
 void ATG_Tile::SetupWater()
@@ -208,12 +190,46 @@ void ATG_Tile::SetupWater()
   FVector waterPos = FVector(0.f, 0.f, waterHeightPos);
   waterComponent->SetRelativeLocation(waterPos);
 
+
   // Scale of the Water
   FVector scale = waterComponent->CalcBounds(waterComponent->GetRelativeTransform()).BoxExtent;
   float waterPlaneScaleX = (tileSettings.getTileSize() / scale.X) / 2.f;
   float waterPlaneScaleY = (tileSettings.getTileSize() / scale.Y) / 2.f;
-  waterComponent->SetRelativeScale3D(FVector(waterPlaneScaleX, waterPlaneScaleY, 1.f));
+  scale = FVector(waterPlaneScaleX, waterPlaneScaleY, 1.f);
 
+  // Only set if the scale is greater than 1.f
+  if ( !(scale == FVector(1.f, 1.f, 1.f)) ) {
+    waterComponent->SetRelativeScale3D(FVector(waterPlaneScaleX, waterPlaneScaleY, 1.f));
+  }
+}
+
+void ATG_Tile::SetupBiomes()
+{
+  if (TerrainGenerator->useVertexColor == true) {
+    // For each Biome
+    for (int indexBiome = 0; indexBiome < TerrainGenerator->biomeList.Num(); indexBiome++)
+    {
+      // Vertices
+      for (int i = 0; i < tileSettings.ArraySize; i++) {
+        // Get Perlin Value
+        float perlinValue = MeshToCreate.Vertices[i].Z / tileSettings.getHeightRange();
+
+        // If the perlinNoise Value is between the Min & Max Height
+        if (perlinValue >= TerrainGenerator->biomeList[indexBiome].minHeight) {
+          if (perlinValue < TerrainGenerator->biomeList[indexBiome].maxHeight) {
+
+            // Select a random Color
+            int numberOfColors = TerrainGenerator->biomeList[indexBiome].vertexColors.Num() - 1;
+            int randomVertexColor = FMath::RandRange(0, numberOfColors);
+
+            // Set the Vertex Color
+            MeshToCreate.VertexColors[i] = TerrainGenerator->biomeList[indexBiome].vertexColors[randomVertexColor];
+          }
+        }
+
+      }
+    }
+  }
 }
 
 FString ATG_Tile::GetTileNameCoords(int x, int y)

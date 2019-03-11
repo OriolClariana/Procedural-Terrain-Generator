@@ -79,6 +79,14 @@ public:
   UPROPERTY(EditAnywhere, AdvancedDisplay, Category = "TerrainGenerator|Biomes", Meta = (ToolTip = "Material overrides."))
     UMaterialInterface* defaultMaterial = UMaterial::GetDefaultMaterial(MD_Surface);
 
+  /* Use vertex Color == true | Use Material False */
+  UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "TerrainGenerator|Biomes")
+    bool useVertexColor = false;
+
+  /* Settings for the Biomes */
+  UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "TerrainGenerator|Biomes")
+    TArray<FBiomeSettings> biomeList;
+
   /* Activate Water */
   UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "TerrainGenerator|Biomes|Water")
     bool useWater = true;
@@ -93,10 +101,6 @@ public:
   /* Water Level position with respect to HeightRange */
   UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "TerrainGenerator|Biomes|Water", meta = (ClampMin = "0.0", ClampMax = "1.0", UIMin = "0.0", UIMax = "1.0"))
     float waterHeight = 0.4f;
-
-  /* Settings for the Biomes */
-  UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "TerrainGenerator|Biomes")
-    TArray<FBiomeSettings> biomeList;
 
   /*
     RUNTIME OPTION

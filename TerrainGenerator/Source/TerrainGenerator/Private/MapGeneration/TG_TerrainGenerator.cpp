@@ -149,6 +149,7 @@ void ATG_TerrainGenerator::DestroyTerrain()
   if (TilesList.Num() > 0) {
     for (ATG_Tile* tile : TilesList)
     {
+      tile->RuntimeMesh->ClearAllMeshSections();
       tile->Destroy();
     }
     TilesList.Empty();
