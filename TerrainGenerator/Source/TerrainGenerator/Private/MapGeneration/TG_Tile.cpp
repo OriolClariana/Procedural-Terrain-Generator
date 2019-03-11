@@ -40,8 +40,6 @@ void ATG_Tile::Init(int tileID, int coordX, int coordY, FTileSettings tSettings,
   TileY = coordY;
   tileSettings = tSettings;
 
-  // Set Water
-  SetupWater();
 
   // Initialize the values to default
   InitMeshToCreate();
@@ -52,6 +50,9 @@ void ATG_Tile::Init(int tileID, int coordX, int coordY, FTileSettings tSettings,
 
   if (Generated == false)
   {
+	// Set Water
+	SetupWater();
+
     // Create the Mesh
     GenerateMesh();
   }
@@ -146,7 +147,22 @@ void ATG_Tile::GenerateTriangles()
 void ATG_Tile::GenerateMesh()
 {
   UE_LOG(LogTile, Log, TEXT("Generating mesh for Tile ID [%d]"), TileID);
-  RuntimeMesh->SetMaterial(TileID, TerrainGenerator->defaultMaterial);
+  //RuntimeMesh->SetMaterial(TileID, TerrainGenerator->defaultMaterial);
+
+  for (int i = 0; i < RuntimeMesh->GetNumSections(); i++) {
+	TUniquePtr<FRuntimeMeshScopedUpdater> meshSection = RuntimeMesh->GetSectionReadonly(i);
+	FVector sectionPosition = meshSection->GetPosition(0);
+
+	if (sectionPosition.Z > 0.5f) {
+	  UMaterialInterface* material = UMaterial::GetDefaultMaterial(MD_Surface);
+	  RuntimeMesh->SetSectionMaterial(i, material);
+	}
+	else {
+		RuntimeMesh->SetSectionMaterial(i, TerrainGenerator->defaultMaterial);
+	}
+  }
+
+
   RuntimeMesh->CreateMeshSection(TileID,
     MeshToCreate.Vertices,
     MeshToCreate.Triangles,
