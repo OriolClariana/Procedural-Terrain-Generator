@@ -9,6 +9,8 @@
 /* Algorithms */
 #include "TG_PerlinNoise.h"
 
+#include "GameFramework/Character.h"
+
 #include "CoreMinimal.h"
 #include "GameFramework/Info.h"
 #include "TG_TerrainGenerator.generated.h"
@@ -34,10 +36,16 @@ public:
     void CreateTerrain();
 
   UFUNCTION()
+    void CreateTile(int x, int y);
+
+  UFUNCTION()
     void UpdateTerrain();
 
   UFUNCTION()
     void DestroyTerrain();
+
+  UFUNCTION()
+    FVector2D getPlayerTileCoord();
 
   /* Algorithms Functions */
   UFUNCTION()
@@ -54,10 +62,10 @@ public:
     int Seed = 12345;
   // Tile to Create in X axis
   UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "TerrainGenerator", meta = (ClampMin = "1.0"))
-    int numberOfTilesX = 3;
+    int numberOfTilesX = 5;
   // Tile to Create in Y axis
   UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "TerrainGenerator", meta = (ClampMin = "1.0"))
-    int numberOfTilesY = 3;
+    int numberOfTilesY = 5;
 
   UPROPERTY(EditAnywhere, Category = "TerrainGenerator", meta = (ClampMin = "1"))
     double Amplitude = 1;
@@ -72,7 +80,7 @@ public:
 
   // List of the Tiles Created
   UPROPERTY(VisibleAnywhere, BlueprintReadWrite, Category = "TerrainGenerator|Tile|Lists")
-    TArray<ATG_Tile*> TilesList;
+    TMap<FVector2D, ATG_Tile*> TileMap;
 
 
   /* Default Material in case not exist Biome */
@@ -111,6 +119,11 @@ public:
   UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "TerrainGenerator|Runtime", Meta = (EditCondition = "useRuntime"))
     bool infiniteTerrain = false;
 
+  UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "TerrainGenerator|Runtime|Infinite")
+    float maxViewDistance = 15000.f;
+  UPROPERTY(VisibleAnywhere, BlueprintReadWrite, Category = "TerrainGenerator|Runtime|Infinite")
+    int tVisibleInViewDst = 0;
+
   /*
     PRE BACK OPTION
   */
@@ -128,13 +141,22 @@ public:
     PATHS FOR EDITOR
   */
   // List of the Tiles Created
-  UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "TerrainGenerator|Paths")
+  UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "TerrainGenerator|EditorTexts")
     FName TilePath = TEXT("Tiles");
 
+  UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "TerrainGenerator|EditorTexts")
+    FName TileName = TEXT("Tile");
+
+  // The Player
+  UPROPERTY()
+    ACharacter* player = nullptr;
 
 protected:
   UPROPERTY()
-  bool generated = false;
+    bool generated = false;
+
+  UPROPERTY()
+    TArray<ATG_Tile*> TileList;
 
   TG_PerlinNoise perlinNoise;
 

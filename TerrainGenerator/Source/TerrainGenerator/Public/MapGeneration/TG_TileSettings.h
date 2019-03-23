@@ -14,16 +14,12 @@ enum class TerrainSizeIn : uint8 {
 USTRUCT(BlueprintType)
 struct FTileSettings {
   GENERATED_BODY()
-
-  UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "TileSettings")
-    bool TileCentred = true;
-
   UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "TileSettings", meta = (ClampMin = "1.0"))
     float TileSize = 10000.f;
   UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "TileSettings")
     TerrainSizeIn TileScaleIn = TerrainSizeIn::TerrainSizeIn_CM;
 
-  UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "TileSettings", meta = (ClampMin = "1.0"))
+  UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "TileSettings", meta = (ClampMin = "2.0"))
     float LevelOfDetail = 50.f;
   UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "TileSettings")
     TerrainSizeIn LODScale = TerrainSizeIn::TerrainSizeIn_CM;

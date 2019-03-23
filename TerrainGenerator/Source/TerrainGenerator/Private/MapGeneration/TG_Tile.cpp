@@ -40,6 +40,13 @@ void ATG_Tile::Init(int tileID, int coordX, int coordY, FTileSettings tSettings,
   TileY = coordY;
   tileSettings = tSettings;
 
+  //Name of the Tile
+#if WITH_EDITOR
+  if (TerrainGenerator->TileName != TEXT("")) {
+    this->SetActorLabel(TerrainGenerator->TileName.ToString() + " [" + FString::FromInt(TileX) + "," + FString::FromInt(TileY) + "]");
+  }
+#endif
+
   // Set Water
   SetupWater();
 
@@ -69,10 +76,20 @@ void ATG_Tile::Init(int tileID, int coordX, int coordY, FTileSettings tSettings,
 
   // Set Generated Tile to True
   Generated = true;
+
+  // Set Tile is Visible
+  SetVisibile(true);
 }
 
 void ATG_Tile::Update(int coordX, int coordY) {
 
+  // Calculate if this Tile is Visible or Not
+  FVector viewer = TerrainGenerator->player->GetActorLocation();
+  viewer.Z = 0.f;
+
+  float viewerDstFromNearestEdge = FVector::Dist2D(this->GetActorLocation(), viewer);
+  bool visibility = viewerDstFromNearestEdge <= TerrainGenerator->maxViewDistance;
+  SetVisibile(visibility);
 }
 
 void ATG_Tile::InitMeshToCreate()
@@ -158,6 +175,7 @@ void ATG_Tile::GenerateMesh()
 void ATG_Tile::UpdateMesh()
 {
   UE_LOG(LogTile, Log, TEXT("Update mesh for Tile ID [%d]"), TileID);
+  RuntimeMesh->SetMaterial(TileID, TerrainGenerator->defaultMaterial);
 
   RuntimeMesh->UpdateMeshSection(TileID,
     MeshToCreate.Vertices,
@@ -281,24 +299,23 @@ void ATG_Tile::SetTileWorldPosition(int coordX, int coordY)
 
   FVector position = FVector::ZeroVector;
 
-  // Tile Centered or not
-  switch (tileSettings.TileCentred)
-  {
-  case true:
-    position = FVector(
-      (coordX * tileSettings.getTileSize() - (tileSettings.getTileSize() / 2)),
-      (coordY * tileSettings.getTileSize() - (tileSettings.getTileSize() / 2)),
-      0.f
-    );
-    break;
-  case false:
-    position = FVector(
-      coordX * tileSettings.getTileSize(),
-      coordY * tileSettings.getTileSize(),
-      0.f
-    );
-    break;
-  }
+  // Set the Coordinates
+  position = FVector(
+    coordX * tileSettings.getTileSize(),
+    coordY * tileSettings.getTileSize(),
+    0.f
+  );
 
   SetActorLocation(position);
+}
+
+void ATG_Tile::SetVisibile(bool option)
+{
+  Visible = option;
+  
+  // Show or Hide the Mesh
+  RuntimeMesh->SetVisibility(option, true);
+
+  // Show or Hide The Water
+  waterComponent->SetVisibility(option, true);
 }

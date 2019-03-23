@@ -12,10 +12,16 @@ ATG_TerrainGenerator::ATG_TerrainGenerator()
 
 void ATG_TerrainGenerator::BeginPlay()
 {
-	Super::BeginPlay();
+  Super::BeginPlay();
+
+  // Get the player
+  player = UGameplayStatics::GetPlayerCharacter(GetWorld(), 0);
 	
   if (useRuntime)
   {
+    // Test
+    tVisibleInViewDst = (int)(maxViewDistance / tileSettings.getTileSize());
+
     CreateTerrain();
   }
 }
@@ -24,6 +30,45 @@ void ATG_TerrainGenerator::Tick(float DeltaTime)
 {
 	Super::Tick(DeltaTime);
 
+  // Endless Terrain
+  if (useRuntime && infiniteTerrain)
+  {
+    FVector2D currentTile = getPlayerTileCoord();
+    if (GEngine) {
+      GEngine->AddOnScreenDebugMessage(-1, 3.0f, FColor::Red, FString::Printf(TEXT("%.1f  |  %.1f"), currentTile.X, currentTile.Y));
+    }
+
+    // Set Visible to False the Current Tiles
+    for (ATG_Tile* tile : TileList) {
+      tile->SetVisibile(false);
+    }
+    TileList.Empty();
+
+    // Check if it's needed a new Tile
+    for (int yOffset = -tVisibleInViewDst; yOffset <= tVisibleInViewDst; yOffset++) {
+      for (int xOffset = -tVisibleInViewDst; xOffset <= tVisibleInViewDst; xOffset++) {
+        FVector2D viewedTileCoord = FVector2D(currentTile.X + xOffset, currentTile.Y + yOffset);
+
+        // Check if contains this tile
+        if (TileMap.Contains(viewedTileCoord)) {
+
+          // TODO: For now just update the Visiblity option
+          TileMap[viewedTileCoord]->Update(viewedTileCoord.X, viewedTileCoord.Y);
+
+          // If the Tile is Visible save for next frame
+          if (TileMap[viewedTileCoord]->Visible) {
+            TileList.Add(TileMap[viewedTileCoord]);
+          }
+
+        }
+        else {
+          // For now Create a new one
+          CreateTile(viewedTileCoord.X, viewedTileCoord.Y);
+        }
+      }
+    }
+
+  }
 }
 
 #if WITH_EDITOR
@@ -105,26 +150,30 @@ void ATG_TerrainGenerator::CreateTerrain()
     for (int y = -(numberOfTilesY / 2); y <= (numberOfTilesY / 2); ++y) {
 
       // Create new Tile
-      ATG_Tile* tile = GetWorld()->SpawnActor<ATG_Tile>(FVector::ZeroVector, FRotator::ZeroRotator);
-
-#if WITH_EDITOR
-      if (TilePath != TEXT("")) {
-        tile->SetFolderPath(TilePath);
-      }
-#endif
-
-      // ID
-      int newTileId = TilesList.Num();
-
-      // Initialize the Tile
-      tile->Init(newTileId, x, y, tileSettings, this);
-
-      // Save the Tile
-      TilesList.Add(tile);
+      CreateTile(x, y);
     }
   }
 
   generated = true;
+}
+
+void ATG_TerrainGenerator::CreateTile(int x, int y) {
+  ATG_Tile* tile = GetWorld()->SpawnActor<ATG_Tile>(FVector::ZeroVector, FRotator::ZeroRotator);
+
+#if WITH_EDITOR
+  if (TilePath != TEXT("")) {
+    tile->SetFolderPath(TilePath);
+  }
+#endif
+
+  // ID
+  int newTileId = TileMap.Num();
+
+  // Initialize the Tile
+  tile->Init(newTileId, x, y, tileSettings, this);
+
+  // Save the Tile
+  TileMap.Add(FVector2D(x, y), tile);
 }
 
 void ATG_TerrainGenerator::UpdateTerrain() {
@@ -136,9 +185,9 @@ void ATG_TerrainGenerator::UpdateTerrain() {
   // Initialize the Algorithm selected
   InitAlgorithm();
 
-  for (ATG_Tile* tile : TilesList) {
+  for (auto tile : TileMap) {
     // Initialize the Tile
-    tile->Init(tile->TileID, tile->TileX, tile->TileY, tileSettings, this);
+    tile.Value->Init(tile.Value->TileID, tile.Value->TileX, tile.Value->TileY, tileSettings, this);
   }
 }
 
@@ -146,13 +195,13 @@ void ATG_TerrainGenerator::DestroyTerrain()
 {
   UE_LOG(LogTerrainGenerator, Log, TEXT("Destroy all the Terrain Tiles"));
   // If Tiles exist
-  if (TilesList.Num() > 0) {
-    for (ATG_Tile* tile : TilesList)
+  if (TileMap.Num() > 0) {
+    for (auto tile : TileMap)
     {
-      tile->RuntimeMesh->ClearAllMeshSections();
-      tile->Destroy();
+      tile.Value->RuntimeMesh->ClearAllMeshSections();
+      tile.Value->Destroy();
     }
-    TilesList.Empty();
+    TileMap.Empty();
   }
 
   generated = false;
@@ -178,4 +227,15 @@ double ATG_TerrainGenerator::GetAlgorithmValue(double x, double y) {
   value *= Amplitude;
 
   return value;
+}
+
+FVector2D ATG_TerrainGenerator::getPlayerTileCoord() {
+  FVector pLocation = player->GetActorLocation();
+  
+  // Calculate the Tile X and Tile Y of the Player
+  int pX = pLocation.X / tileSettings.getTileSize();
+  int pY = pLocation.Y / tileSettings.getTileSize();
+
+  // Return the Tile Coords
+  return FVector2D(pX, pY);
 }

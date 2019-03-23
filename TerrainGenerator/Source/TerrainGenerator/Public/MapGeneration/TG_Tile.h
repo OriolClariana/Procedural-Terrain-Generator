@@ -48,12 +48,16 @@ public:
     void SetAlgorithmValueAt(int x, int y, FVector value);
   UFUNCTION()
     void SetTileWorldPosition(int coordX, int coordY);
+  UFUNCTION()
+    void SetVisibile(bool option);
 
   /*
    CONFIGURABLE VARIABLES
   */
   UPROPERTY(VisibleAnywhere, BlueprintReadWrite, Category = "Tile")
     bool Generated = false;
+  UPROPERTY(VisibleAnywhere, BlueprintReadWrite, Category = "Tile")
+    bool Visible = false;
 
   UPROPERTY(VisibleAnywhere, BlueprintReadWrite, Category = "Tile")
     int TileID = -1;
