@@ -45,8 +45,6 @@ public:
 
   /* SETTER */
   UFUNCTION()
-    void SetAlgorithmValueAt(int x, int y, FVector value);
-  UFUNCTION()
     void SetTileWorldPosition(int coordX, int coordY);
   UFUNCTION()
     void SetVisibile(bool option);
@@ -96,9 +94,14 @@ protected:
   /* Setup the Water settings*/
   UFUNCTION()
     void SetupWater();
-  
+
+  /* Setup the Biomes settings*/
   UFUNCTION()
     void SetupBiomes();
+
+  /* Set the Terrain Position on the middle the Tile */
+  UFUNCTION()
+	void InitTerrainPosition();
 
 private:
   UPROPERTY()

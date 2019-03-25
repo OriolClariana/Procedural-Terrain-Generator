@@ -4,6 +4,7 @@
 #include "TG_TerrainGenerator.h"
 
 DEFINE_LOG_CATEGORY_STATIC(LogTile, Log, All);
+DEFINE_LOG_CATEGORY_STATIC(LogTileAsync, Log, All);
 
 // Sets default values
 ATG_Tile::ATG_Tile()
@@ -31,21 +32,28 @@ void ATG_Tile::BeginPlay()
 // Sets default values
 void ATG_Tile::Init(int tileID, int coordX, int coordY, FTileSettings tSettings, ATG_TerrainGenerator* manager)
 {
-  UE_LOG(LogTile, Log, TEXT("INIT Tile ID [%d] Coords X: %d, Coords Y: %d"), tileID, coordX, coordY);
+  UE_LOG(LogTile, Log, TEXT("TILE[%d] Init Tile"), tileID, coordX, coordY);
+  // The Manager
   TerrainGenerator = manager;
+  //Name of the Tile
+#if WITH_EDITOR
+  if (TerrainGenerator->TileName != TEXT("")) {
+	  this->SetActorLabel(TerrainGenerator->TileName.ToString() + " [" + FString::FromInt(TileX) + "," + FString::FromInt(TileY) + "]");
+  }
+#endif
 
+  // Tile Info
   TileID = tileID;
   TileSeed = manager->Seed * coordX + coordY;
   TileX = coordX;
   TileY = coordY;
   tileSettings = tSettings;
 
-  //Name of the Tile
-#if WITH_EDITOR
-  if (TerrainGenerator->TileName != TEXT("")) {
-    this->SetActorLabel(TerrainGenerator->TileName.ToString() + " [" + FString::FromInt(TileX) + "," + FString::FromInt(TileY) + "]");
-  }
-#endif
+  // Set the terrain on the middle of the Actor
+  InitTerrainPosition();
+
+  // Move Tile to World Position
+  SetTileWorldPosition(coordX, coordY);
 
   // Set Water
   SetupWater();
@@ -71,12 +79,6 @@ void ATG_Tile::Init(int tileID, int coordX, int coordY, FTileSettings tSettings,
     UpdateMesh();
   }
 
-  // Move Tile to World Position
-  SetTileWorldPosition(coordX, coordY);
-
-  // Set Generated Tile to True
-  Generated = true;
-
   // Set Tile is Visible
   SetVisibile(true);
 }
@@ -94,7 +96,7 @@ void ATG_Tile::Update(int coordX, int coordY) {
 
 void ATG_Tile::InitMeshToCreate()
 {
-  UE_LOG(LogTile, Log, TEXT("INIT Mesh to Create in Tile ID [%d]"), TileID);
+  UE_LOG(LogTile, Log, TEXT("TILE[%d] Initialize Mesh Values"), TileID);
   MeshToCreate.Vertices.Init(FVector(0.0, 0.0, 0.0), tileSettings.ArraySize);
   MeshToCreate.Normals.Init(FVector(0, 0, 1), tileSettings.ArraySize);
   MeshToCreate.Tangents.Init(FRuntimeMeshTangent(0, -1, 0), tileSettings.ArraySize);
@@ -104,15 +106,11 @@ void ATG_Tile::InitMeshToCreate()
   int NumberOfQuadsPerLine =  tileSettings.getArrayLineSize();
   int TrianglesArraySize = NumberOfQuadsPerLine * NumberOfQuadsPerLine * QuadSize;
   MeshToCreate.Triangles.Init(0, TrianglesArraySize);
-
-  // Position of the Terrain
-  FVector position = FVector(tileSettings.getTileSize() / 2, tileSettings.getTileSize() / 2, 0.f);
-  RuntimeMesh->SetRelativeLocation(position * -1);
 }
 
 void ATG_Tile::GenerateVertices()
 {
-  UE_LOG(LogTile, Log, TEXT("Generating Vertices for Tile ID [%d]"), TileID);
+  UE_LOG(LogTile, Log, TEXT("TILE[%d] Generating Vertices"), TileID);
 
   int NumberOfQuadsPerLine = tileSettings.getArrayLineSize();
   for (int y = 0; y < NumberOfQuadsPerLine; y++) {
@@ -124,7 +122,9 @@ void ATG_Tile::GenerateVertices()
       double ZPos = ScaleZWithHeightRange(AlgorithmZ);
       FVector value = FVector(Position.X, Position.Y, ZPos);
       int index = GetValueIndexForCoordinates(x, y);
-      SetAlgorithmValueAt(x, y, value);
+      // Set the Algorithm Value At X & Y coordinates
+	  MeshToCreate.Vertices[GetValueIndexForCoordinates(x, y)] = value;
+	  // Calculate the UV
       MeshToCreate.UV[index] = CalculateUV(x, y);
     }
   }
@@ -132,7 +132,7 @@ void ATG_Tile::GenerateVertices()
 
 void ATG_Tile::GenerateTriangles()
 {
-  UE_LOG(LogTile, Log, TEXT("Generating Triangles for Tile ID [%d]"), TileID);
+  UE_LOG(LogTile, Log, TEXT("TILE[%d] Generating Triangles"), TileID);
   int QuadSize = 6;
   int NumberOfQuadsPerLine = tileSettings.getArrayLineSize() - 1;
 
@@ -157,7 +157,7 @@ void ATG_Tile::GenerateTriangles()
 
 void ATG_Tile::GenerateMesh()
 {
-  UE_LOG(LogTile, Log, TEXT("Generating mesh for Tile ID [%d]"), TileID);
+  UE_LOG(LogTile, Log, TEXT("TILE[%d] Generating Mesh"), TileID);
   RuntimeMesh->SetMaterial(TileID, TerrainGenerator->defaultMaterial);
   
   RuntimeMesh->CreateMeshSection(TileID,
@@ -170,11 +170,14 @@ void ATG_Tile::GenerateMesh()
     true,
     EUpdateFrequency::Infrequent,
     ESectionUpdateFlags::CalculateNormalTangent);
+
+  // Set Generated Tile to True
+  Generated = true;
 }
 
 void ATG_Tile::UpdateMesh()
 {
-  UE_LOG(LogTile, Log, TEXT("Update mesh for Tile ID [%d]"), TileID);
+  UE_LOG(LogTile, Log, TEXT("TILE[%d] Update Mesh"), TileID);
   RuntimeMesh->SetMaterial(TileID, TerrainGenerator->defaultMaterial);
 
   RuntimeMesh->UpdateMeshSection(TileID,
@@ -189,6 +192,7 @@ void ATG_Tile::UpdateMesh()
 
 void ATG_Tile::SetupWater()
 {
+  UE_LOG(LogTile, Log, TEXT("TILE[%d] Setup Water"), TileID);
   // If not use the water hide plane and disable collision JUST IN CASE
   if (false == TerrainGenerator->useWater)
   {
@@ -223,6 +227,8 @@ void ATG_Tile::SetupWater()
 
 void ATG_Tile::SetupBiomes()
 {
+  UE_LOG(LogTile, Log, TEXT("TILE[%d] Setup Biomes"), TileID);
+
   if (TerrainGenerator->useVertexColor == true) {
     // For each Biome
     for (int indexBiome = 0; indexBiome < TerrainGenerator->biomeList.Num(); indexBiome++)
@@ -288,14 +294,9 @@ double ATG_Tile::GetNoiseValueForGridCoordinates(double x, double y)
   return TerrainGenerator->GetAlgorithmValue(worldX, worldY);
 }
 
-void ATG_Tile::SetAlgorithmValueAt(int x, int y, FVector value)
-{
-  MeshToCreate.Vertices[GetValueIndexForCoordinates(x, y)] = value;
-}
-
 void ATG_Tile::SetTileWorldPosition(int coordX, int coordY)
 {
-  UE_LOG(LogTile, Log, TEXT("Set Tile[%d] to Tile Pos: %d - %d"), TileID, coordX, coordY);
+  UE_LOG(LogTile, Log, TEXT("TILE[%d] to Pos: [%d, %d]"), TileID, coordX, coordY);
 
   FVector position = FVector::ZeroVector;
 
@@ -307,6 +308,12 @@ void ATG_Tile::SetTileWorldPosition(int coordX, int coordY)
   );
 
   SetActorLocation(position);
+}
+
+void ATG_Tile::InitTerrainPosition() {
+	// Position of the Terrain
+	FVector position = FVector(tileSettings.getTileSize() / 2, tileSettings.getTileSize() / 2, 0.f);
+	RuntimeMesh->SetRelativeLocation(position * -1);
 }
 
 void ATG_Tile::SetVisibile(bool option)

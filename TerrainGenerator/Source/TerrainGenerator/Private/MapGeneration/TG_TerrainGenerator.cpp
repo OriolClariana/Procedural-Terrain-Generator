@@ -158,6 +158,7 @@ void ATG_TerrainGenerator::CreateTerrain()
 }
 
 void ATG_TerrainGenerator::CreateTile(int x, int y) {
+  UE_LOG(LogTerrainGenerator, Log, TEXT("Create the Tile [%d, %d]"), x, y);
   ATG_Tile* tile = GetWorld()->SpawnActor<ATG_Tile>(FVector::ZeroVector, FRotator::ZeroRotator);
 
 #if WITH_EDITOR
@@ -170,10 +171,17 @@ void ATG_TerrainGenerator::CreateTile(int x, int y) {
   int newTileId = TileMap.Num();
 
   // Initialize the Tile
-  tile->Init(newTileId, x, y, tileSettings, this);
+  (new FAutoDeleteAsyncTask<FTileCreationTask>(tile, newTileId, x, y, tileSettings, this))->StartBackgroundTask();
+  //tile->Init(newTileId, x, y, tileSettings, this);
 
   // Save the Tile
   TileMap.Add(FVector2D(x, y), tile);
+
+  // SetVisible False for now
+  if (useRuntime && infiniteTerrain) {
+	  tile->SetVisibile(false);
+  }
+
 }
 
 void ATG_TerrainGenerator::UpdateTerrain() {
@@ -187,7 +195,8 @@ void ATG_TerrainGenerator::UpdateTerrain() {
 
   for (auto tile : TileMap) {
     // Initialize the Tile
-    tile.Value->Init(tile.Value->TileID, tile.Value->TileX, tile.Value->TileY, tileSettings, this);
+	(new FAutoDeleteAsyncTask<FTileCreationTask>(tile.Value, tile.Value->TileID, tile.Value->TileX, tile.Value->TileY, tileSettings, this))->StartBackgroundTask();
+    //tile.Value->Init(tile.Value->TileID, tile.Value->TileX, tile.Value->TileY, tileSettings, this);
   }
 }
 
@@ -210,7 +219,7 @@ void ATG_TerrainGenerator::DestroyTerrain()
 
 void ATG_TerrainGenerator::InitAlgorithm() {
 
-  if (Seed == 0) {
+  if (randomSeed) {
     Seed = FMath::Rand();
   }
   perlinNoise.setNoiseSeed(Seed);
@@ -238,4 +247,31 @@ FVector2D ATG_TerrainGenerator::getPlayerTileCoord() {
 
   // Return the Tile Coords
   return FVector2D(pX, pY);
+}
+
+
+/* ================================================================== */
+/* ========================== MultiThread =========================== */
+/* ================================================================== */
+
+FTileCreationTask::FTileCreationTask(ATG_Tile* tile_, int id, int x, int y, FTileSettings tSettings, ATG_TerrainGenerator* manager) {
+	UE_LOG(LogTileAsync, Log, TEXT("Task Started"));
+
+	tile = tile_;
+	tileID = id;
+	xCoord = x;
+	yCoord = y;
+	tileSettings = tSettings;
+	TerrainGenerator = manager;
+}
+
+FTileCreationTask::~FTileCreationTask() {
+	UE_LOG(LogTileAsync, Warning, TEXT("Task Finished"));
+
+}
+
+void FTileCreationTask::DoWork() {
+	UE_LOG(LogTileAsync, Warning, TEXT("Doing Work"));
+
+	tile->Init(tileID, xCoord, yCoord, tileSettings, TerrainGenerator);
 }

@@ -37,7 +37,7 @@ public:
 
   UFUNCTION()
     void CreateTile(int x, int y);
-
+  
   UFUNCTION()
     void UpdateTerrain();
 
@@ -58,6 +58,8 @@ public:
    CONFIGURABLE VARIABLES
   */
   /* Seed of the Map */
+  UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "TerrainGenerator")
+	bool randomSeed = false;
   UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "TerrainGenerator")
     int Seed = 12345;
   // Tile to Create in X axis
@@ -120,7 +122,7 @@ public:
     bool infiniteTerrain = false;
 
   UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "TerrainGenerator|Runtime|Infinite")
-    float maxViewDistance = 15000.f;
+    float maxViewDistance = 25000.f;
   UPROPERTY(VisibleAnywhere, BlueprintReadWrite, Category = "TerrainGenerator|Runtime|Infinite")
     int tVisibleInViewDst = 0;
 
@@ -163,4 +165,29 @@ protected:
 private:
 	
 	
+};
+
+
+/* ================================================================== */
+/* ========================== MultiThread =========================== */
+/* ================================================================== */
+class FTileCreationTask : public FNonAbandonableTask {
+	friend class FAutoDeleteAsyncTask<FTileCreationTask>;
+public:
+	FTileCreationTask(ATG_Tile* tile_, int id, int x, int y, FTileSettings tSettings, ATG_TerrainGenerator* manager);
+	~FTileCreationTask();
+
+	ATG_Tile* tile;
+	int tileID;
+	int xCoord;
+	int yCoord;
+	FTileSettings tileSettings;
+	ATG_TerrainGenerator* TerrainGenerator;
+
+	void DoWork();
+
+	FORCEINLINE TStatId GetStatId() const
+	{
+		RETURN_QUICK_DECLARE_CYCLE_STAT(FTileCreationTask, STATGROUP_ThreadPoolAsyncTasks);
+	}
 };
