@@ -20,7 +20,9 @@ struct FTileSettings {
     TerrainSizeIn TileScaleIn = TerrainSizeIn::TerrainSizeIn_CM;
 
   UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "TileSettings", meta = (ClampMin = "2.0"))
-    float LevelOfDetail = 50.f;
+    bool bOptimalLOD = true;
+  UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "TileSettings", meta = (ClampMin = "2.0"))
+    float LevelOfDetail = 200.f;
   UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "TileSettings")
     TerrainSizeIn LODScale = TerrainSizeIn::TerrainSizeIn_CM;
 
@@ -41,6 +43,11 @@ struct FTileSettings {
   /* FUNCTIONS */
   /* Constructor */
   void Init() {
+    // Calculated Optimal LOD
+    if (bOptimalLOD) {
+      LevelOfDetail = getTileSize() / 50.f;
+    }
+
     ArrayLineSize = (getTileSize() / getLOD() + 1);
     ArraySize = (ArrayLineSize * ArrayLineSize);
   }

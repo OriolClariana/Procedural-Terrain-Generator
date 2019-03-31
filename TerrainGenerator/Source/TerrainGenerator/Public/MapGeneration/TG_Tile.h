@@ -25,7 +25,6 @@ public:
 
   UFUNCTION()
     void Init(int tileID, int coordX, int coordY, FTileSettings tSettings, ATG_TerrainGenerator* manager);
-
   UFUNCTION()
     void Update(int coordX, int coordY);
 
@@ -43,12 +42,14 @@ public:
   UFUNCTION()
     double GetNoiseValueForGridCoordinates(double x, double y);
 
+
   /* SETTER */
   UFUNCTION()
-    void SetTileWorldPosition(int coordX, int coordY);
+    void SetTileWorldPosition(int coordX, int coordY, FTileSettings tSettings);
   UFUNCTION()
     void SetVisibile(bool option);
 
+ 
   /*
    CONFIGURABLE VARIABLES
   */
@@ -82,26 +83,31 @@ protected:
     void GenerateVertices();
   UFUNCTION()
     void GenerateTriangles();
+  UFUNCTION()
+    void GenerateNormalTangents(bool SmoothNormals);
 
   /* Generate the Mesh with the values modified in other functions */
   UFUNCTION()
-    void GenerateMesh();
+    void GenerateMesh(UMaterialInterface* material);
 
   /* Update the Mesh with the values modified in other functions */
   UFUNCTION()
-    void UpdateMesh();
+    void UpdateMesh(UMaterialInterface* material);
 
   /* Setup the Water settings*/
   UFUNCTION()
-    void SetupWater();
+    void SetupWater(FTileSettings tSettings, ATG_TerrainGenerator* manager);
 
   /* Setup the Biomes settings*/
   UFUNCTION()
-    void SetupBiomes();
+    void SetupBiomes(FTileSettings tSettings, ATG_TerrainGenerator* manager);
 
   /* Set the Terrain Position on the middle the Tile */
   UFUNCTION()
 	void InitTerrainPosition();
+
+  UFUNCTION()
+    void setTileName(FName text);
 
 private:
   UPROPERTY()

@@ -3,6 +3,8 @@
 #include "TG_Tile.h"
 #include "TG_TerrainGenerator.h"
 
+#include "RuntimeMeshLibrary.h"
+
 DEFINE_LOG_CATEGORY_STATIC(LogTile, Log, All);
 DEFINE_LOG_CATEGORY_STATIC(LogTileAsync, Log, All);
 
@@ -35,12 +37,6 @@ void ATG_Tile::Init(int tileID, int coordX, int coordY, FTileSettings tSettings,
   UE_LOG(LogTile, Log, TEXT("TILE[%d] Init Tile"), tileID, coordX, coordY);
   // The Manager
   TerrainGenerator = manager;
-  //Name of the Tile
-#if WITH_EDITOR
-  if (TerrainGenerator->TileName != TEXT("")) {
-	  this->SetActorLabel(TerrainGenerator->TileName.ToString() + " [" + FString::FromInt(TileX) + "," + FString::FromInt(TileY) + "]");
-  }
-#endif
 
   // Tile Info
   TileID = tileID;
@@ -48,15 +44,18 @@ void ATG_Tile::Init(int tileID, int coordX, int coordY, FTileSettings tSettings,
   TileX = coordX;
   TileY = coordY;
   tileSettings = tSettings;
+ 
+  // Set the Name of the Tile
+  AsyncTask(ENamedThreads::GameThread, [&]() { setTileName(TerrainGenerator->TileName); });
 
   // Set the terrain on the middle of the Actor
-  InitTerrainPosition();
+  AsyncTask(ENamedThreads::GameThread, [&]() {InitTerrainPosition(); });
 
   // Move Tile to World Position
-  SetTileWorldPosition(coordX, coordY);
+  AsyncTask(ENamedThreads::GameThread, [&]() { SetTileWorldPosition(TileX, TileY, tileSettings); });
 
   // Set Water
-  SetupWater();
+  AsyncTask(ENamedThreads::GameThread, [&]() { SetupWater(tileSettings, TerrainGenerator); });
 
   // Initialize the values to default
   InitMeshToCreate();
@@ -64,23 +63,25 @@ void ATG_Tile::Init(int tileID, int coordX, int coordY, FTileSettings tSettings,
   // Generate everything
   GenerateTriangles();
   GenerateVertices();
+  GenerateNormalTangents(false);
 
-  // Setyo the Biomes
-  SetupBiomes();
+  // Set the Biomes
+  AsyncTask(ENamedThreads::GameThread, [&]() { SetupBiomes(tileSettings, TerrainGenerator); });
 
   if (Generated == false)
   {
     // Create the Mesh
-    GenerateMesh();
+    AsyncTask(ENamedThreads::GameThread, [&]() { GenerateMesh(TerrainGenerator->defaultMaterial); });
   }
   else
   {
     // Update the Mesh
-    UpdateMesh();
+    AsyncTask(ENamedThreads::GameThread, [&]() { UpdateMesh(TerrainGenerator->defaultMaterial); });
   }
 
   // Set Tile is Visible
-  SetVisibile(true);
+  AsyncTask(ENamedThreads::GameThread, [&]() { SetVisibile(true); });
+
 }
 
 void ATG_Tile::Update(int coordX, int coordY) {
@@ -155,11 +156,17 @@ void ATG_Tile::GenerateTriangles()
   }
 }
 
-void ATG_Tile::GenerateMesh()
+void ATG_Tile::GenerateNormalTangents(bool SmoothNormals) {
+  // Calculate Normals And Tangents
+  URuntimeMeshLibrary::CalculateTangentsForMesh(MeshToCreate.Vertices, MeshToCreate.Triangles, MeshToCreate.Normals,
+    MeshToCreate.UV, MeshToCreate.Tangents, SmoothNormals);
+}
+
+void ATG_Tile::GenerateMesh(UMaterialInterface* material)
 {
   UE_LOG(LogTile, Log, TEXT("TILE[%d] Generating Mesh"), TileID);
-  RuntimeMesh->SetMaterial(TileID, TerrainGenerator->defaultMaterial);
-  
+  RuntimeMesh->SetMaterial(TileID, material);
+
   RuntimeMesh->CreateMeshSection(TileID,
     MeshToCreate.Vertices,
     MeshToCreate.Triangles,
@@ -169,16 +176,17 @@ void ATG_Tile::GenerateMesh()
     MeshToCreate.Tangents,
     true,
     EUpdateFrequency::Infrequent,
-    ESectionUpdateFlags::CalculateNormalTangent);
+    ESectionUpdateFlags::None);
+
 
   // Set Generated Tile to True
   Generated = true;
 }
 
-void ATG_Tile::UpdateMesh()
+void ATG_Tile::UpdateMesh(UMaterialInterface* material)
 {
   UE_LOG(LogTile, Log, TEXT("TILE[%d] Update Mesh"), TileID);
-  RuntimeMesh->SetMaterial(TileID, TerrainGenerator->defaultMaterial);
+  RuntimeMesh->SetMaterial(TileID, material);
 
   RuntimeMesh->UpdateMeshSection(TileID,
     MeshToCreate.Vertices,
@@ -187,14 +195,14 @@ void ATG_Tile::UpdateMesh()
     MeshToCreate.UV,
     MeshToCreate.VertexColors,
     MeshToCreate.Tangents,
-    ESectionUpdateFlags::CalculateNormalTangent);
+    ESectionUpdateFlags::None);
 }
 
-void ATG_Tile::SetupWater()
+void ATG_Tile::SetupWater(FTileSettings tSettings, ATG_TerrainGenerator* manager)
 {
   UE_LOG(LogTile, Log, TEXT("TILE[%d] Setup Water"), TileID);
   // If not use the water hide plane and disable collision JUST IN CASE
-  if (false == TerrainGenerator->useWater)
+  if (false == manager->useWater)
   {
     waterComponent->SetHiddenInGame(true);
     waterComponent->SetCollisionEnabled(ECollisionEnabled::NoCollision);
@@ -202,21 +210,21 @@ void ATG_Tile::SetupWater()
   }
 
   // Set the mesh to use
-  waterComponent->SetStaticMesh(TerrainGenerator->water);
+  waterComponent->SetStaticMesh(manager->water);
 
   // Set the material for the water
-  waterComponent->SetMaterial(0, TerrainGenerator->waterMaterial);
+  waterComponent->SetMaterial(0, manager->waterMaterial);
 
   // Height of the Water
-  float waterHeightPos = TerrainGenerator->waterHeight * tileSettings.getHeightRange();
+  float waterHeightPos = manager->waterHeight * tSettings.getHeightRange();
   FVector waterPos = FVector(0.f, 0.f, waterHeightPos);
   waterComponent->SetRelativeLocation(waterPos);
 
 
   // Scale of the Water
   FVector scale = waterComponent->CalcBounds(waterComponent->GetRelativeTransform()).BoxExtent;
-  float waterPlaneScaleX = (tileSettings.getTileSize() / scale.X) / 2.f;
-  float waterPlaneScaleY = (tileSettings.getTileSize() / scale.Y) / 2.f;
+  float waterPlaneScaleX = (tSettings.getTileSize() / scale.X) / 2.f;
+  float waterPlaneScaleY = (tSettings.getTileSize() / scale.Y) / 2.f;
   scale = FVector(waterPlaneScaleX, waterPlaneScaleY, 1.f);
 
   // Only set if the scale is greater than 1.f
@@ -225,29 +233,29 @@ void ATG_Tile::SetupWater()
   }
 }
 
-void ATG_Tile::SetupBiomes()
+void ATG_Tile::SetupBiomes(FTileSettings tSettings, ATG_TerrainGenerator* manager)
 {
   UE_LOG(LogTile, Log, TEXT("TILE[%d] Setup Biomes"), TileID);
 
-  if (TerrainGenerator->useVertexColor == true) {
+  if (manager->useVertexColor == true) {
     // For each Biome
-    for (int indexBiome = 0; indexBiome < TerrainGenerator->biomeList.Num(); indexBiome++)
+    for (int indexBiome = 0; indexBiome < manager->biomeList.Num(); indexBiome++)
     {
       // Vertices
-      for (int i = 0; i < tileSettings.ArraySize; i++) {
+      for (int i = 0; i < tSettings.ArraySize; i++) {
         // Get Perlin Value
-        float perlinValue = MeshToCreate.Vertices[i].Z / tileSettings.getHeightRange();
+        float perlinValue = MeshToCreate.Vertices[i].Z / tSettings.getHeightRange();
 
         // If the perlinNoise Value is between the Min & Max Height
-        if (perlinValue >= TerrainGenerator->biomeList[indexBiome].minHeight) {
-          if (perlinValue < TerrainGenerator->biomeList[indexBiome].maxHeight) {
+        if (perlinValue >= manager->biomeList[indexBiome].minHeight) {
+          if (perlinValue < manager->biomeList[indexBiome].maxHeight) {
 
             // Select a random Color
-            int numberOfColors = TerrainGenerator->biomeList[indexBiome].vertexColors.Num() - 1;
+            int numberOfColors = manager->biomeList[indexBiome].vertexColors.Num() - 1;
             int randomVertexColor = FMath::RandRange(0, numberOfColors);
 
             // Set the Vertex Color
-            MeshToCreate.VertexColors[i] = TerrainGenerator->biomeList[indexBiome].vertexColors[randomVertexColor];
+            MeshToCreate.VertexColors[i] = manager->biomeList[indexBiome].vertexColors[randomVertexColor];
           }
         }
 
@@ -294,16 +302,14 @@ double ATG_Tile::GetNoiseValueForGridCoordinates(double x, double y)
   return TerrainGenerator->GetAlgorithmValue(worldX, worldY);
 }
 
-void ATG_Tile::SetTileWorldPosition(int coordX, int coordY)
+void ATG_Tile::SetTileWorldPosition(int coordX, int coordY, FTileSettings tSettings)
 {
-  UE_LOG(LogTile, Log, TEXT("TILE[%d] to Pos: [%d, %d]"), TileID, coordX, coordY);
-
   FVector position = FVector::ZeroVector;
 
   // Set the Coordinates
   position = FVector(
-    coordX * tileSettings.getTileSize(),
-    coordY * tileSettings.getTileSize(),
+    coordX * tSettings.getTileSize(),
+    coordY * tSettings.getTileSize(),
     0.f
   );
 
@@ -325,4 +331,13 @@ void ATG_Tile::SetVisibile(bool option)
 
   // Show or Hide The Water
   waterComponent->SetVisibility(option, true);
+}
+
+void ATG_Tile::setTileName(FName text) {
+  //Name of the Tile
+#if WITH_EDITOR
+  if (text != TEXT("")) {
+    this->SetActorLabel(text.ToString() + " [" + FString::FromInt(TileX) + "," + FString::FromInt(TileY) + "]");
+  }
+#endif
 }

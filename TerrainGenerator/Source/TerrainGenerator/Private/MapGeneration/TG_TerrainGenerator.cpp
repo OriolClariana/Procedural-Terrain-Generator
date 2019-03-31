@@ -2,7 +2,10 @@
 
 #include "TG_TerrainGenerator.h"
 
+#include "Async/Async.h"
+
 DEFINE_LOG_CATEGORY_STATIC(LogTerrainGenerator, Log, All);
+DEFINE_LOG_CATEGORY_STATIC(LogTileCreation, Log, All);
 
 ATG_TerrainGenerator::ATG_TerrainGenerator()
 {
@@ -52,7 +55,7 @@ void ATG_TerrainGenerator::Tick(float DeltaTime)
         // Check if contains this tile
         if (TileMap.Contains(viewedTileCoord)) {
 
-          // TODO: For now just update the Visiblity option
+          // TODO: For now just update the Visibility option
           TileMap[viewedTileCoord]->Update(viewedTileCoord.X, viewedTileCoord.Y);
 
           // If the Tile is Visible save for next frame
@@ -138,7 +141,11 @@ void ATG_TerrainGenerator::PostEditChangeProperty(struct FPropertyChangedEvent& 
 void ATG_TerrainGenerator::CreateTerrain()
 {
   UE_LOG(LogTerrainGenerator, Log, TEXT("Create the Terrain"));
-  
+  // Calculate the optimal Max View Distance
+  if (optimalViewDistance) {
+    maxViewDistance = (numberOfTiles * tileSettings.TileSize) / 1.8f;
+  }
+
   // Init the tileArray Size
   tileSettings.Init();
 
@@ -146,9 +153,8 @@ void ATG_TerrainGenerator::CreateTerrain()
   InitAlgorithm();
 
   //Loop
-  for (int x = -(numberOfTilesX / 2); x <= (numberOfTilesX / 2); ++x) {
-    for (int y = -(numberOfTilesY / 2); y <= (numberOfTilesY / 2); ++y) {
-
+  for (int x = -(numberOfTiles / 2); x <= (numberOfTiles / 2); ++x) {
+    for (int y = -(numberOfTiles / 2); y <= (numberOfTiles / 2); ++y) {
       // Create new Tile
       CreateTile(x, y);
     }
@@ -171,8 +177,7 @@ void ATG_TerrainGenerator::CreateTile(int x, int y) {
   int newTileId = TileMap.Num();
 
   // Initialize the Tile
-  (new FAutoDeleteAsyncTask<FTileCreationTask>(tile, newTileId, x, y, tileSettings, this))->StartBackgroundTask();
-  //tile->Init(newTileId, x, y, tileSettings, this);
+  auto future = Async<void>(EAsyncExecution::Thread, [&]() { tile->Init(newTileId, x, y, tileSettings, this); }, [&] { /* Callback */ });
 
   // Save the Tile
   TileMap.Add(FVector2D(x, y), tile);
@@ -195,8 +200,7 @@ void ATG_TerrainGenerator::UpdateTerrain() {
 
   for (auto tile : TileMap) {
     // Initialize the Tile
-	(new FAutoDeleteAsyncTask<FTileCreationTask>(tile.Value, tile.Value->TileID, tile.Value->TileX, tile.Value->TileY, tileSettings, this))->StartBackgroundTask();
-    //tile.Value->Init(tile.Value->TileID, tile.Value->TileX, tile.Value->TileY, tileSettings, this);
+    auto future = Async<void>(EAsyncExecution::Thread, [&]() { tile.Value->Init(tile.Value->TileID, tile.Value->TileX, tile.Value->TileY, tileSettings, this); }, [&] { /* Callback */ });
   }
 }
 
@@ -247,31 +251,4 @@ FVector2D ATG_TerrainGenerator::getPlayerTileCoord() {
 
   // Return the Tile Coords
   return FVector2D(pX, pY);
-}
-
-
-/* ================================================================== */
-/* ========================== MultiThread =========================== */
-/* ================================================================== */
-
-FTileCreationTask::FTileCreationTask(ATG_Tile* tile_, int id, int x, int y, FTileSettings tSettings, ATG_TerrainGenerator* manager) {
-	UE_LOG(LogTileAsync, Log, TEXT("Task Started"));
-
-	tile = tile_;
-	tileID = id;
-	xCoord = x;
-	yCoord = y;
-	tileSettings = tSettings;
-	TerrainGenerator = manager;
-}
-
-FTileCreationTask::~FTileCreationTask() {
-	UE_LOG(LogTileAsync, Warning, TEXT("Task Finished"));
-
-}
-
-void FTileCreationTask::DoWork() {
-	UE_LOG(LogTileAsync, Warning, TEXT("Doing Work"));
-
-	tile->Init(tileID, xCoord, yCoord, tileSettings, TerrainGenerator);
 }

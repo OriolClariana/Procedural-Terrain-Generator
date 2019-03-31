@@ -62,17 +62,13 @@ public:
 	bool randomSeed = false;
   UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "TerrainGenerator")
     int Seed = 12345;
-  // Tile to Create in X axis
+  // Tile to Create in X & Y axis
   UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "TerrainGenerator", meta = (ClampMin = "1.0"))
-    int numberOfTilesX = 5;
-  // Tile to Create in Y axis
-  UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "TerrainGenerator", meta = (ClampMin = "1.0"))
-    int numberOfTilesY = 5;
-
+    int numberOfTiles = 8;
   UPROPERTY(EditAnywhere, Category = "TerrainGenerator", meta = (ClampMin = "1"))
-    double Amplitude = 1;
+    double Amplitude = 5;
   UPROPERTY(EditAnywhere, Category = "TerrainGenerator", meta = (ClampMin = "0.0", ClampMax = "0.01"))
-    double Frequency = 0.0001;
+    double Frequency = 0.00001;
   UPROPERTY(EditAnywhere, Category = "TerrainGenerator")
     int Octaves = 8;
 
@@ -122,6 +118,8 @@ public:
     bool infiniteTerrain = false;
 
   UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "TerrainGenerator|Runtime|Infinite")
+    bool optimalViewDistance = true;
+  UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "TerrainGenerator|Runtime|Infinite")
     float maxViewDistance = 25000.f;
   UPROPERTY(VisibleAnywhere, BlueprintReadWrite, Category = "TerrainGenerator|Runtime|Infinite")
     int tVisibleInViewDst = 0;
@@ -164,30 +162,4 @@ protected:
 
 private:
 	
-	
-};
-
-
-/* ================================================================== */
-/* ========================== MultiThread =========================== */
-/* ================================================================== */
-class FTileCreationTask : public FNonAbandonableTask {
-	friend class FAutoDeleteAsyncTask<FTileCreationTask>;
-public:
-	FTileCreationTask(ATG_Tile* tile_, int id, int x, int y, FTileSettings tSettings, ATG_TerrainGenerator* manager);
-	~FTileCreationTask();
-
-	ATG_Tile* tile;
-	int tileID;
-	int xCoord;
-	int yCoord;
-	FTileSettings tileSettings;
-	ATG_TerrainGenerator* TerrainGenerator;
-
-	void DoWork();
-
-	FORCEINLINE TStatId GetStatId() const
-	{
-		RETURN_QUICK_DECLARE_CYCLE_STAT(FTileCreationTask, STATGROUP_ThreadPoolAsyncTasks);
-	}
 };
