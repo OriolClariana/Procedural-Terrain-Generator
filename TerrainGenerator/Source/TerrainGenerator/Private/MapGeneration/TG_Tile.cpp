@@ -54,9 +54,6 @@ void ATG_Tile::Init(int tileID, int coordX, int coordY, FTileSettings tSettings,
   // Move Tile to World Position
   AsyncTask(ENamedThreads::GameThread, [&]() { SetTileWorldPosition(TileX, TileY, tileSettings); });
 
-  // Set Water
-  AsyncTask(ENamedThreads::GameThread, [&]() { SetupWater(tileSettings, TerrainGenerator); });
-
   // Initialize the values to default
   InitMeshToCreate();
 
@@ -64,6 +61,9 @@ void ATG_Tile::Init(int tileID, int coordX, int coordY, FTileSettings tSettings,
   GenerateTriangles();
   GenerateVertices();
   GenerateNormalTangents(false);
+
+  // Set Water
+  AsyncTask(ENamedThreads::GameThread, [&]() { SetupWater(tileSettings, TerrainGenerator); });
 
   // Set the Biomes
   AsyncTask(ENamedThreads::GameThread, [&]() { SetupBiomes(tileSettings, TerrainGenerator); });
@@ -98,11 +98,12 @@ void ATG_Tile::Update(int coordX, int coordY) {
 void ATG_Tile::InitMeshToCreate()
 {
   UE_LOG(LogTile, Log, TEXT("TILE[%d] Initialize Mesh Values"), TileID);
+  ZPositions.Init(0.0, tileSettings.ArraySize);
   MeshToCreate.Vertices.Init(FVector(0.0, 0.0, 0.0), tileSettings.ArraySize);
   MeshToCreate.Normals.Init(FVector(0, 0, 1), tileSettings.ArraySize);
   MeshToCreate.Tangents.Init(FRuntimeMeshTangent(0, -1, 0), tileSettings.ArraySize);
   MeshToCreate.UV.Init(FVector2D(0, 0), tileSettings.ArraySize);
-  MeshToCreate.VertexColors.Init(FColor::Green, tileSettings.ArraySize);
+  MeshToCreate.VertexColors.Init(FColor::White, tileSettings.ArraySize);
   int QuadSize = 6;
   int NumberOfQuadsPerLine =  tileSettings.getArrayLineSize();
   int TrianglesArraySize = NumberOfQuadsPerLine * NumberOfQuadsPerLine * QuadSize;
@@ -119,14 +120,22 @@ void ATG_Tile::GenerateVertices()
       FVector2D Position = GetVerticePosition(x, y);
 
       double AlgorithmZ = GetNoiseValueForGridCoordinates(Position.X, Position.Y);
-
+            
       double ZPos = ScaleZWithHeightRange(AlgorithmZ);
       FVector value = FVector(Position.X, Position.Y, ZPos);
       int index = GetValueIndexForCoordinates(x, y);
       // Set the Algorithm Value At X & Y coordinates
-	  MeshToCreate.Vertices[GetValueIndexForCoordinates(x, y)] = value;
-	  // Calculate the UV
+      MeshToCreate.Vertices[GetValueIndexForCoordinates(x, y)] = value;
+      // Calculate the UV
       MeshToCreate.UV[index] = CalculateUV(x, y);
+
+      // Save the Z Position
+      ZPositions[GetValueIndexForCoordinates(x, y)] = ZPos;
+      // Save the Maximum Z Position
+      if (ZPos > TerrainGenerator->maxHeight) {
+        TerrainGenerator->maxHeight = ZPos;
+      }
+
     }
   }
 }
@@ -165,8 +174,7 @@ void ATG_Tile::GenerateNormalTangents(bool SmoothNormals) {
 void ATG_Tile::GenerateMesh(UMaterialInterface* material)
 {
   UE_LOG(LogTile, Log, TEXT("TILE[%d] Generating Mesh"), TileID);
-  RuntimeMesh->SetMaterial(TileID, material);
-
+  //RuntimeMesh->SetMaterial(TileID, material);
   RuntimeMesh->CreateMeshSection(TileID,
     MeshToCreate.Vertices,
     MeshToCreate.Triangles,
@@ -178,6 +186,7 @@ void ATG_Tile::GenerateMesh(UMaterialInterface* material)
     EUpdateFrequency::Infrequent,
     ESectionUpdateFlags::None);
 
+  RuntimeMesh->SetSectionMaterial(TileID, material);
 
   // Set Generated Tile to True
   Generated = true;
@@ -186,7 +195,7 @@ void ATG_Tile::GenerateMesh(UMaterialInterface* material)
 void ATG_Tile::UpdateMesh(UMaterialInterface* material)
 {
   UE_LOG(LogTile, Log, TEXT("TILE[%d] Update Mesh"), TileID);
-  RuntimeMesh->SetMaterial(TileID, material);
+  //RuntimeMesh->SetMaterial(TileID, material);
 
   RuntimeMesh->UpdateMeshSection(TileID,
     MeshToCreate.Vertices,
@@ -196,6 +205,8 @@ void ATG_Tile::UpdateMesh(UMaterialInterface* material)
     MeshToCreate.VertexColors,
     MeshToCreate.Tangents,
     ESectionUpdateFlags::None);
+
+  RuntimeMesh->SetSectionMaterial(TileID, material);
 }
 
 void ATG_Tile::SetupWater(FTileSettings tSettings, ATG_TerrainGenerator* manager)
@@ -216,7 +227,7 @@ void ATG_Tile::SetupWater(FTileSettings tSettings, ATG_TerrainGenerator* manager
   waterComponent->SetMaterial(0, manager->waterMaterial);
 
   // Height of the Water
-  float waterHeightPos = manager->waterHeight * tSettings.getHeightRange();
+  float waterHeightPos = TerrainGenerator->maxHeight * manager->waterHeight;
   FVector waterPos = FVector(0.f, 0.f, waterHeightPos);
   waterComponent->SetRelativeLocation(waterPos);
 
@@ -238,17 +249,28 @@ void ATG_Tile::SetupBiomes(FTileSettings tSettings, ATG_TerrainGenerator* manage
   UE_LOG(LogTile, Log, TEXT("TILE[%d] Setup Biomes"), TileID);
 
   if (manager->useVertexColor == true) {
+
     // For each Biome
     for (int indexBiome = 0; indexBiome < manager->biomeList.Num(); indexBiome++)
     {
+      FBiomeSettings lowerBiome;
+
       // Vertices
       for (int i = 0; i < tSettings.ArraySize; i++) {
         // Get Perlin Value
-        float perlinValue = MeshToCreate.Vertices[i].Z / tSettings.getHeightRange();
+        float ZPos = ZPositions[i] / TerrainGenerator->maxHeight;
 
-        // If the perlinNoise Value is between the Min & Max Height
-        if (perlinValue >= manager->biomeList[indexBiome].minHeight) {
-          if (perlinValue < manager->biomeList[indexBiome].maxHeight) {
+        // Set the VertexColor depend the Height
+        if (ZPos < 0.0 && manager->biomeList[indexBiome].minHeight == 0.0) {
+          // Select a random Color
+          int numberOfColors = manager->biomeList[indexBiome].vertexColors.Num() - 1;
+          int randomVertexColor = FMath::RandRange(0, numberOfColors);
+
+          // Set the Vertex Color
+          MeshToCreate.VertexColors[i] = manager->biomeList[indexBiome].vertexColors[randomVertexColor];
+        }
+        else if (ZPos >= manager->biomeList[indexBiome].minHeight) {
+          if (ZPos < manager->biomeList[indexBiome].maxHeight) {
 
             // Select a random Color
             int numberOfColors = manager->biomeList[indexBiome].vertexColors.Num() - 1;
@@ -258,7 +280,6 @@ void ATG_Tile::SetupBiomes(FTileSettings tSettings, ATG_TerrainGenerator* manage
             MeshToCreate.VertexColors[i] = manager->biomeList[indexBiome].vertexColors[randomVertexColor];
           }
         }
-
       }
     }
   }
@@ -285,8 +306,8 @@ FVector2D ATG_Tile::CalculateUV(float x, float y)
   );
 }
 
-float ATG_Tile::ScaleZWithHeightRange(double AlgorithmZ) {
-  return AlgorithmZ * tileSettings.getHeightRange();
+float ATG_Tile::ScaleZWithHeightRange(double value) {
+  return value * tileSettings.getHeightRange();
 }
 
 int ATG_Tile::GetValueIndexForCoordinates(int x, int y)

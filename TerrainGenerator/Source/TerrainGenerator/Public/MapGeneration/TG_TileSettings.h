@@ -15,25 +15,25 @@ USTRUCT(BlueprintType)
 struct FTileSettings {
   GENERATED_BODY()
   UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "TileSettings", meta = (ClampMin = "1.0"))
-    float TileSize = 10000.f;
+    float TileSize = 50000.0f;
   UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "TileSettings")
     TerrainSizeIn TileScaleIn = TerrainSizeIn::TerrainSizeIn_CM;
 
   UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "TileSettings", meta = (ClampMin = "2.0"))
     bool bOptimalLOD = true;
   UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "TileSettings", meta = (ClampMin = "2.0"))
-    float LevelOfDetail = 200.f;
+    float LevelOfDetail = 1000.f;
   UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "TileSettings")
     TerrainSizeIn LODScale = TerrainSizeIn::TerrainSizeIn_CM;
 
   UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "TileSettings", meta = (ClampMin = "1.0"))
-    float HeightRange = 3000.f;
+    float HeightRange = 25000.0f;
   UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "TileSettings")
     TerrainSizeIn HeightScale = TerrainSizeIn::TerrainSizeIn_CM;
 
   /* Recommended to be equal to LevelOfDetail */
   UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "TileSettings", meta = (ClampMin = "1.0"))
-    float TextureScale = 50.f;
+    float TextureScale = 1.f;
 
   UPROPERTY(VisibleAnywhere, BlueprintReadWrite, Category = "TileSettings")
     int ArrayLineSize = 0;

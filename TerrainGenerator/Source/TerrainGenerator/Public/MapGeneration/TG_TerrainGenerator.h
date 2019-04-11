@@ -61,14 +61,14 @@ public:
   UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "TerrainGenerator")
 	bool randomSeed = false;
   UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "TerrainGenerator")
-    int Seed = 12345;
+    int Seed = 3140;
   // Tile to Create in X & Y axis
   UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "TerrainGenerator", meta = (ClampMin = "1.0"))
-    int numberOfTiles = 8;
+    int numberOfTiles = 10;
   UPROPERTY(EditAnywhere, Category = "TerrainGenerator", meta = (ClampMin = "1"))
     double Amplitude = 5;
   UPROPERTY(EditAnywhere, Category = "TerrainGenerator", meta = (ClampMin = "0.0", ClampMax = "0.01"))
-    double Frequency = 0.00001;
+    double Frequency = 0.000002;
   UPROPERTY(EditAnywhere, Category = "TerrainGenerator")
     int Octaves = 8;
 
@@ -85,9 +85,13 @@ public:
   UPROPERTY(EditAnywhere, AdvancedDisplay, Category = "TerrainGenerator|Biomes", Meta = (ToolTip = "Material overrides."))
     UMaterialInterface* defaultMaterial = UMaterial::GetDefaultMaterial(MD_Surface);
 
-  /* Use vertex Color == true | Use Material False */
+  /* Use vertex Color == true | Use Material == False */
   UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "TerrainGenerator|Biomes")
     bool useVertexColor = false;
+
+  /* Spawn the assets in the Biome List */
+  UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "TerrainGenerator|Biomes")
+    bool spawnAssets = false;
 
   /* Settings for the Biomes */
   UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "TerrainGenerator|Biomes")
@@ -151,6 +155,9 @@ public:
   UPROPERTY()
     ACharacter* player = nullptr;
 
+  UPROPERTY()
+    double maxHeight = 0.0;
+
 protected:
   UPROPERTY()
     bool generated = false;
@@ -158,8 +165,11 @@ protected:
   UPROPERTY()
     TArray<ATG_Tile*> TileList;
 
-  TG_PerlinNoise perlinNoise;
+  TG_PerlinNoise perlinNoiseTerrain;
+  TG_PerlinNoise perlinNoiseBiomes;
+  TG_PerlinNoise perlinNoiseAssets;
 
 private:
+  void default_biomes();
 	
 };

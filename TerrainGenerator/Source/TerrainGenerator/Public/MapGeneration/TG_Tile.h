@@ -36,7 +36,7 @@ public:
   UFUNCTION()
     FVector2D CalculateUV(float x, float y);
   UFUNCTION()
-    float ScaleZWithHeightRange(double AlgorithmZ);
+    float ScaleZWithHeightRange(double value);
   UFUNCTION()
     int GetValueIndexForCoordinates(int x, int y);
   UFUNCTION()
@@ -104,10 +104,13 @@ protected:
 
   /* Set the Terrain Position on the middle the Tile */
   UFUNCTION()
-	void InitTerrainPosition();
+	  void InitTerrainPosition();
 
   UFUNCTION()
     void setTileName(FName text);
+
+  // Perlin Value Array
+  TArray<double> ZPositions;
 
 private:
   UPROPERTY()

@@ -11,6 +11,7 @@ ATG_TerrainGenerator::ATG_TerrainGenerator()
 {
  	PrimaryActorTick.bCanEverTick = true;
 
+  default_biomes();
 }
 
 void ATG_TerrainGenerator::BeginPlay()
@@ -38,7 +39,7 @@ void ATG_TerrainGenerator::Tick(float DeltaTime)
   {
     FVector2D currentTile = getPlayerTileCoord();
     if (GEngine) {
-      GEngine->AddOnScreenDebugMessage(-1, 3.0f, FColor::Red, FString::Printf(TEXT("%.1f  |  %.1f"), currentTile.X, currentTile.Y));
+      //GEngine->AddOnScreenDebugMessage(-1, 3.0f, FColor::Red, FString::Printf(TEXT("%.1f  |  %.1f"), currentTile.X, currentTile.Y));
     }
 
     // Set Visible to False the Current Tiles
@@ -220,21 +221,32 @@ void ATG_TerrainGenerator::DestroyTerrain()
   generated = false;
 }
 
-
 void ATG_TerrainGenerator::InitAlgorithm() {
 
   if (randomSeed) {
     Seed = FMath::Rand();
   }
-  perlinNoise.setNoiseSeed(Seed);
 
+  // Initialize the Terrain Perlin Noise
+  perlinNoiseTerrain.setNoiseSeed(Seed);
+
+  // If has some biome
+  if (biomeList.Num() > 0) {
+    // Initialize the Biomes Perlin Noise
+    perlinNoiseBiomes.setNoiseSeed(Seed + 1);
+  }
+
+  // If has assets to distribute
+  if (biomeList.Num() > 0 && spawnAssets) {
+    // Initialize the Assets Perlin Noise
+    perlinNoiseAssets.setNoiseSeed(Seed + 2);
+  }
 }
-
 
 double ATG_TerrainGenerator::GetAlgorithmValue(double x, double y) {
   double value = 0.0;
 
-  value += perlinNoise.octaveNoise0_1(Frequency * x, Frequency * y, Octaves);
+  value += perlinNoiseTerrain.octaveNoise0_1(Frequency * x, Frequency * y, Octaves);
   
   //Apply the Amplitude to the results
   value *= Amplitude;
@@ -251,4 +263,56 @@ FVector2D ATG_TerrainGenerator::getPlayerTileCoord() {
 
   // Return the Tile Coords
   return FVector2D(pX, pY);
+}
+
+void ATG_TerrainGenerator::default_biomes() {
+  // Beach
+  FBiomeSettings beach;
+  beach.biomeName = TEXT("Beach");
+  beach.minHeight = 0.0f;
+  beach.maxHeight = 0.45f;
+  FColor sandColor_1 = FColor(255, 235, 175, 1);
+  FColor sandColor_2 = FColor(255, 230, 160, 1);
+  FColor sandColor_3 = FColor(255, 225, 140, 1);
+  beach.vertexColors.Add(sandColor_1);
+  beach.vertexColors.Add(sandColor_2);
+  beach.vertexColors.Add(sandColor_3);
+  biomeList.Add(beach);
+
+  // Plains
+  FBiomeSettings plain;
+  plain.biomeName = TEXT("Plain");
+  plain.minHeight = 0.45f;
+  plain.maxHeight = 0.75f;
+  FColor grassColor_1 = FColor(110, 200, 110, 1);
+  FColor grassColor_2 = FColor(95, 190, 95, 1);
+  FColor grassColor_3 = FColor(120, 220, 120, 1);
+  plain.vertexColors.Add(grassColor_1);
+  plain.vertexColors.Add(grassColor_2);
+  plain.vertexColors.Add(grassColor_3);
+  biomeList.Add(plain);
+
+  // Mountains
+  FBiomeSettings mountain;
+  mountain.biomeName = TEXT("Mountain");
+  mountain.minHeight = 0.75f;
+  mountain.maxHeight = 0.95f;
+  FColor rockColor_1 = FColor(180, 180, 180, 1);
+  FColor rockColor_2 = FColor(170, 170, 170, 1);
+  FColor rockColor_3 = FColor(160, 160, 160, 1);
+  mountain.vertexColors.Add(rockColor_1);
+  mountain.vertexColors.Add(rockColor_2);
+  mountain.vertexColors.Add(rockColor_3);
+  biomeList.Add(mountain);
+
+  // Snow
+  FBiomeSettings snow;
+  snow.biomeName = TEXT("Snow");
+  snow.minHeight = 0.95f;
+  snow.maxHeight = 1.0f;
+  FColor snowColor_1 = FColor(240, 240, 240, 1);
+  FColor snowColor_2 = FColor(230, 230, 230, 1);
+  snow.vertexColors.Add(snowColor_1);
+  snow.vertexColors.Add(snowColor_2);
+  biomeList.Add(snow);
 }
