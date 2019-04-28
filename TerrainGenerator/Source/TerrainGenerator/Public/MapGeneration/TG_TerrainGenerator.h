@@ -10,10 +10,18 @@
 #include "TG_PerlinNoise.h"
 
 #include "GameFramework/Character.h"
+#include <Components/InstancedStaticMeshComponent.h>
 
 #include "CoreMinimal.h"
 #include "GameFramework/Info.h"
 #include "TG_TerrainGenerator.generated.h"
+
+// Perlin Type
+UENUM(BlueprintType)
+enum class PerlinType : uint8 {
+  Perlin_Terrain      UMETA(DisplayName = "Terrain"),
+  Perlin_Biome        UMETA(DisplayName = "Biome"),
+};
 
 UCLASS(Blueprintable)
 class TERRAINGENERATOR_API ATG_TerrainGenerator : public AInfo
@@ -54,6 +62,9 @@ public:
   UFUNCTION()
     double GetAlgorithmValue(double x, double y);
 
+  UFUNCTION()
+    double GetSpecifiedAlgorithmValue(PerlinType type, double x, double y, double amplitude = 1.0, double frequency = 1.0, int octaves = 1);
+
   /*
    CONFIGURABLE VARIABLES
   */
@@ -67,8 +78,8 @@ public:
     int numberOfTiles = 10;
   UPROPERTY(EditAnywhere, Category = "TerrainGenerator", meta = (ClampMin = "1"))
     double Amplitude = 5;
-  UPROPERTY(EditAnywhere, Category = "TerrainGenerator", meta = (ClampMin = "0.0", ClampMax = "0.01"))
-    double Frequency = 0.000002;
+  UPROPERTY(EditAnywhere, Category = "TerrainGenerator", meta = (ClampMin = "0.1", ClampMax = "16.0", UIMin = "0.1", UIMax = "16.0"))
+    double Frequency = 12.0;
   UPROPERTY(EditAnywhere, Category = "TerrainGenerator")
     int Octaves = 8;
 
@@ -80,7 +91,6 @@ public:
   UPROPERTY(VisibleAnywhere, BlueprintReadWrite, Category = "TerrainGenerator|Tile|Lists")
     TMap<FVector2D, ATG_Tile*> TileMap;
 
-
   /* Default Material in case not exist Biome */
   UPROPERTY(EditAnywhere, AdvancedDisplay, Category = "TerrainGenerator|Biomes", Meta = (ToolTip = "Material overrides."))
     UMaterialInterface* defaultMaterial = UMaterial::GetDefaultMaterial(MD_Surface);
@@ -88,6 +98,8 @@ public:
   /* Use vertex Color == true | Use Material == False */
   UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "TerrainGenerator|Biomes")
     bool useVertexColor = false;
+  UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "TerrainGenerator|Biomes")
+    bool useHeightMap = false;
 
   /* Spawn the assets in the Biome List */
   UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "TerrainGenerator|Biomes")
@@ -125,6 +137,9 @@ public:
     bool optimalViewDistance = true;
   UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "TerrainGenerator|Runtime|Infinite")
     float maxViewDistance = 25000.f;
+  // max distance for the Assets = maxViewDistance / numReducesMaxViewDistAssets
+  UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "TerrainGenerator|Runtime|Infinite", meta = (ClampMin = "1", ClampMax = "5", UIMin = "1", UIMax = "5"))
+    int numReducesMaxViewDistAssets = 3;
   UPROPERTY(VisibleAnywhere, BlueprintReadWrite, Category = "TerrainGenerator|Runtime|Infinite")
     int tVisibleInViewDst = 0;
 
@@ -151,12 +166,18 @@ public:
   UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "TerrainGenerator|EditorTexts")
     FName TileName = TEXT("Tile");
 
-  // The Player
-  UPROPERTY()
-    ACharacter* player = nullptr;
+  /*
+    DEBUG OPTIONS
+  */
+  // DEPRECTED Option and need to be implemented in a future
+  UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "TerrainGenerator|Debug")
+    bool DestroyTilesOutOfRange = false;
 
-  UPROPERTY()
-    double maxHeight = 0.0;
+  // The Player
+  UPROPERTY(VisibleAnywhere, BlueprintReadWrite, Category = "TerrainGenerator|Debug")
+    ACharacter* player = nullptr;
+  
+  double maxHeight = 0.0;
 
 protected:
   UPROPERTY()
@@ -167,9 +188,8 @@ protected:
 
   TG_PerlinNoise perlinNoiseTerrain;
   TG_PerlinNoise perlinNoiseBiomes;
-  TG_PerlinNoise perlinNoiseAssets;
 
 private:
-  void default_biomes();
-	
+  UFUNCTION()
+    void default_biomes();
 };

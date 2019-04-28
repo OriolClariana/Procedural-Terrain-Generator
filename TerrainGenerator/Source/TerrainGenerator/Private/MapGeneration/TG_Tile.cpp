@@ -13,21 +13,42 @@ ATG_Tile::ATG_Tile()
 {
   // Root
   USceneComponent* root = CreateDefaultSubobject<USceneComponent>(TEXT("Root"));
+  root->SetMobility(EComponentMobility::Static);
   RootComponent = root;
 
   // Terrain
   RuntimeMesh = CreateDefaultSubobject<URuntimeMeshComponent>(TEXT("RuntimeMeshC"));
   RuntimeMesh->SetupAttachment(RootComponent);
+  RuntimeMesh->SetMobility(EComponentMobility::Static);
 
   // Water
   waterComponent = CreateDefaultSubobject<UStaticMeshComponent>(TEXT("WaterC"));
   waterComponent->SetupAttachment(RootComponent);
-}
+  waterComponent->bCastDynamicShadow = false;
+  waterComponent->CastShadow = false;
+  waterComponent->SetMobility(EComponentMobility::Movable);
 
-// Called when the game starts or when spawned
-void ATG_Tile::BeginPlay()
-{
-	Super::BeginPlay();
+  // Assets for Biomes  6 = Number of Biomes
+  for (int i = 0; i < 6; ++i){
+    // Create InstancedStaticMesh
+    UInstancedStaticMeshComponent *ISMComp = NewObject<UInstancedStaticMeshComponent>();
+    ISMComp = CreateDefaultSubobject<UInstancedStaticMeshComponent>(TEXT("InstancedStaticMeshC_Biome_" + i));
+    ISMComp->SetupAttachment(RootComponent);
+    ISMComp->bCastDynamicShadow = true;
+    ISMComp->CastShadow = true;
+
+    //Visibility
+    ISMComp->SetHiddenInGame(false);
+
+    //Mobility
+    ISMComp->SetMobility(EComponentMobility::Stationary);
+
+    //Collision
+    ISMComp->BodyInstance.SetCollisionEnabled(ECollisionEnabled::QueryOnly);
+
+    // Add this to the List
+    InstancedList.Add(ISMComp);
+  }
 
 }
 
@@ -44,16 +65,12 @@ void ATG_Tile::Init(int tileID, int coordX, int coordY, FTileSettings tSettings,
   TileX = coordX;
   TileY = coordY;
   tileSettings = tSettings;
+
+  maxDistanceForAssets = TerrainGenerator->maxViewDistance / TerrainGenerator->numReducesMaxViewDistAssets;
  
   // Set the Name of the Tile
   AsyncTask(ENamedThreads::GameThread, [&]() { setTileName(TerrainGenerator->TileName); });
-
-  // Set the terrain on the middle of the Actor
-  AsyncTask(ENamedThreads::GameThread, [&]() {InitTerrainPosition(); });
-
-  // Move Tile to World Position
-  AsyncTask(ENamedThreads::GameThread, [&]() { SetTileWorldPosition(TileX, TileY, tileSettings); });
-
+  
   // Initialize the values to default
   InitMeshToCreate();
 
@@ -63,10 +80,13 @@ void ATG_Tile::Init(int tileID, int coordX, int coordY, FTileSettings tSettings,
   GenerateNormalTangents(false);
 
   // Set Water
-  AsyncTask(ENamedThreads::GameThread, [&]() { SetupWater(tileSettings, TerrainGenerator); });
+  AsyncTask(ENamedThreads::GameThread, [&]() { SetupWater(tileSettings); });
 
   // Set the Biomes
-  AsyncTask(ENamedThreads::GameThread, [&]() { SetupBiomes(tileSettings, TerrainGenerator); });
+  AsyncTask(ENamedThreads::GameThread, [&]() { SetupBiomes(tileSettings); });
+
+  // Set the Assets
+  AsyncTask(ENamedThreads::GameThread, [&]() { SetupAssets(tileSettings); });
 
   if (Generated == false)
   {
@@ -81,24 +101,56 @@ void ATG_Tile::Init(int tileID, int coordX, int coordY, FTileSettings tSettings,
 
   // Set Tile is Visible
   AsyncTask(ENamedThreads::GameThread, [&]() { SetVisibile(true); });
-
+  AsyncTask(ENamedThreads::GameThread, [&]() { SetVisibileAsset(true); });
 }
 
 void ATG_Tile::Update(int coordX, int coordY) {
+  if (TerrainGenerator) {
+    // Calculate if this Tile is Visible or Not
+    FVector viewer = TerrainGenerator->player->GetActorLocation();
+    viewer.Z = 0.f;
 
-  // Calculate if this Tile is Visible or Not
-  FVector viewer = TerrainGenerator->player->GetActorLocation();
-  viewer.Z = 0.f;
+    float viewerDstFromNearestEdge = FVector::Dist2D(this->GetActorLocation(), viewer);
 
-  float viewerDstFromNearestEdge = FVector::Dist2D(this->GetActorLocation(), viewer);
-  bool visibility = viewerDstFromNearestEdge <= TerrainGenerator->maxViewDistance;
-  SetVisibile(visibility);
+    // The Tile (Terrain & Water)
+    bool vTerrainWater = viewerDstFromNearestEdge <= TerrainGenerator->maxViewDistance;
+    SetVisibile(vTerrainWater);
+
+    // If the Tile exist set the visibility of the assets
+    if (vTerrainWater) {
+      if (viewerDstFromNearestEdge <= maxDistanceForAssets) {
+        SetVisibileAsset(true);
+      }
+    }
+  }
+}
+
+bool ATG_Tile::DestroyTile() {
+  // Hide the Tile
+  SetVisibile(false);
+  SetVisibileAsset(false);
+
+  // Clear Reference to the Terrain Generator Manager
+  TerrainGenerator = nullptr;
+
+  // Destroy Instances
+  for (auto instanceElement : InstancedList) {
+    instanceElement->DestroyComponent(true);
+  }
+
+  // Destroy Water
+  waterComponent->DestroyComponent(true);
+
+  // Destroy RuntimeMesh
+  RuntimeMesh->ClearAllMeshSections();
+  RuntimeMesh->DestroyComponent(true);
+
+  return Destroy(true);
 }
 
 void ATG_Tile::InitMeshToCreate()
 {
   UE_LOG(LogTile, Log, TEXT("TILE[%d] Initialize Mesh Values"), TileID);
-  ZPositions.Init(0.0, tileSettings.ArraySize);
   MeshToCreate.Vertices.Init(FVector(0.0, 0.0, 0.0), tileSettings.ArraySize);
   MeshToCreate.Normals.Init(FVector(0, 0, 1), tileSettings.ArraySize);
   MeshToCreate.Tangents.Init(FRuntimeMeshTangent(0, -1, 0), tileSettings.ArraySize);
@@ -112,30 +164,32 @@ void ATG_Tile::InitMeshToCreate()
 
 void ATG_Tile::GenerateVertices()
 {
-  UE_LOG(LogTile, Log, TEXT("TILE[%d] Generating Vertices"), TileID);
+  if (TerrainGenerator) {
+    UE_LOG(LogTile, Log, TEXT("TILE[%d] Generating Vertices"), TileID);
 
-  int NumberOfQuadsPerLine = tileSettings.getArrayLineSize();
-  for (int y = 0; y < NumberOfQuadsPerLine; y++) {
-    for (int x = 0; x < NumberOfQuadsPerLine; x++) {
-      FVector2D Position = GetVerticePosition(x, y);
+    int NumberOfQuadsPerLine = tileSettings.getArrayLineSize();
+    for (int y = 0; y < NumberOfQuadsPerLine; y++) {
+      for (int x = 0; x < NumberOfQuadsPerLine; x++) {
+        FVector2D Position = GetVerticePosition(x, y);
 
-      double AlgorithmZ = GetNoiseValueForGridCoordinates(Position.X, Position.Y);
-            
-      double ZPos = ScaleZWithHeightRange(AlgorithmZ);
-      FVector value = FVector(Position.X, Position.Y, ZPos);
-      int index = GetValueIndexForCoordinates(x, y);
-      // Set the Algorithm Value At X & Y coordinates
-      MeshToCreate.Vertices[GetValueIndexForCoordinates(x, y)] = value;
-      // Calculate the UV
-      MeshToCreate.UV[index] = CalculateUV(x, y);
+        double AlgorithmZ = GetNoiseValueForGridCoordinates(Position.X, Position.Y);
 
-      // Save the Z Position
-      ZPositions[GetValueIndexForCoordinates(x, y)] = ZPos;
-      // Save the Maximum Z Position
-      if (ZPos > TerrainGenerator->maxHeight) {
-        TerrainGenerator->maxHeight = ZPos;
+        double ZPos = ScaleZWithHeightRange(AlgorithmZ);
+        FVector value = FVector(Position.X, Position.Y, ZPos);
+        int index = GetValueIndexForCoordinates(x, y);
+        // Set the Algorithm Value At X & Y coordinates
+        MeshToCreate.Vertices[GetValueIndexForCoordinates(x, y)] = value;
+        // Calculate the UV
+        MeshToCreate.UV[index] = CalculateUV(x, y);
+
+        // Save the Z Position
+        ZPositions.Add(FVector2D(x, y), ZPos);
+        // Save the Maximum Z Position
+        if (ZPos > TerrainGenerator->maxHeight) {
+          TerrainGenerator->maxHeight = ZPos;
+        }
+
       }
-
     }
   }
 }
@@ -209,79 +263,180 @@ void ATG_Tile::UpdateMesh(UMaterialInterface* material)
   RuntimeMesh->SetSectionMaterial(TileID, material);
 }
 
-void ATG_Tile::SetupWater(FTileSettings tSettings, ATG_TerrainGenerator* manager)
+void ATG_Tile::SetupWater(FTileSettings tSettings)
 {
-  UE_LOG(LogTile, Log, TEXT("TILE[%d] Setup Water"), TileID);
-  // If not use the water hide plane and disable collision JUST IN CASE
-  if (false == manager->useWater)
-  {
-    waterComponent->SetHiddenInGame(true);
-    waterComponent->SetCollisionEnabled(ECollisionEnabled::NoCollision);
-    return;
-  }
+  if (TerrainGenerator) {
+    UE_LOG(LogTile, Log, TEXT("TILE[%d] Setup Water"), TileID);
+    // If not use the water hide plane and disable collision JUST IN CASE
+    if (false == TerrainGenerator->useWater)
+    {
+      waterComponent->SetHiddenInGame(true);
+      waterComponent->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+      return;
+    }
 
-  // Set the mesh to use
-  waterComponent->SetStaticMesh(manager->water);
+    // Set the mesh to use
+    waterComponent->SetStaticMesh(TerrainGenerator->water);
 
-  // Set the material for the water
-  waterComponent->SetMaterial(0, manager->waterMaterial);
+    // Set the material for the water
+    waterComponent->SetMaterial(0, TerrainGenerator->waterMaterial);
 
-  // Height of the Water
-  float waterHeightPos = TerrainGenerator->maxHeight * manager->waterHeight;
-  FVector waterPos = FVector(0.f, 0.f, waterHeightPos);
-  waterComponent->SetRelativeLocation(waterPos);
+    // Height of the Water
+    float waterHeightPos = TerrainGenerator->maxHeight * TerrainGenerator->waterHeight;
+    FVector waterPos = FVector(0.f, 0.f, waterHeightPos);
+    waterComponent->SetRelativeLocation(waterPos);
 
 
-  // Scale of the Water
-  FVector scale = waterComponent->CalcBounds(waterComponent->GetRelativeTransform()).BoxExtent;
-  float waterPlaneScaleX = (tSettings.getTileSize() / scale.X) / 2.f;
-  float waterPlaneScaleY = (tSettings.getTileSize() / scale.Y) / 2.f;
-  scale = FVector(waterPlaneScaleX, waterPlaneScaleY, 1.f);
+    // Scale of the Water
+    FVector scale = waterComponent->CalcBounds(waterComponent->GetRelativeTransform()).BoxExtent;
+    float waterPlaneScaleX = (tSettings.getTileSize() / scale.X) / 2.f;
+    float waterPlaneScaleY = (tSettings.getTileSize() / scale.Y) / 2.f;
+    scale = FVector(waterPlaneScaleX, waterPlaneScaleY, 1.f);
 
-  // Only set if the scale is greater than 1.f
-  if ( !(scale == FVector(1.f, 1.f, 1.f)) ) {
-    waterComponent->SetRelativeScale3D(FVector(waterPlaneScaleX, waterPlaneScaleY, 1.f));
+    // Only set if the scale is greater than 1.f
+    if (!(scale == FVector(1.f, 1.f, 1.f))) {
+      waterComponent->SetRelativeScale3D(FVector(waterPlaneScaleX, waterPlaneScaleY, 1.f));
+    }
   }
 }
 
-void ATG_Tile::SetupBiomes(FTileSettings tSettings, ATG_TerrainGenerator* manager)
+void ATG_Tile::SetupBiomes(FTileSettings tSettings)
 {
-  UE_LOG(LogTile, Log, TEXT("TILE[%d] Setup Biomes"), TileID);
+  if (TerrainGenerator) {
+    UE_LOG(LogTile, Log, TEXT("TILE[%d] Setup Biomes"), TileID);
 
-  if (manager->useVertexColor == true) {
+    if (TerrainGenerator->useVertexColor == true) {
 
-    // For each Biome
-    for (int indexBiome = 0; indexBiome < manager->biomeList.Num(); indexBiome++)
-    {
-      FBiomeSettings lowerBiome;
+      // For each Biome
+      for (int indexBiome = 0; indexBiome < TerrainGenerator->biomeList.Num(); indexBiome++)
+      {
+        // Vertices
+        int i = 0;
+        for (auto Elem : ZPositions) {
+          // Get Perlin Value
+          float ZPos = Elem.Value / TerrainGenerator->maxHeight;
 
-      // Vertices
-      for (int i = 0; i < tSettings.ArraySize; i++) {
-        // Get Perlin Value
-        float ZPos = ZPositions[i] / TerrainGenerator->maxHeight;
+          // Clamp
+          if (ZPos < 0.0f) { ZPos = 0.0f; }
+          else if (ZPos >= 1.0f) { ZPos = 1.f; }
 
-        // Set the VertexColor depend the Height
-        if (ZPos < 0.0 && manager->biomeList[indexBiome].minHeight == 0.0) {
-          // Select a random Color
-          int numberOfColors = manager->biomeList[indexBiome].vertexColors.Num() - 1;
-          int randomVertexColor = FMath::RandRange(0, numberOfColors);
+          // Set the VertexColor depend the Height
+          if (ZPos >= TerrainGenerator->biomeList[indexBiome].minHeight) {
+            if (ZPos <= TerrainGenerator->biomeList[indexBiome].maxHeight) {
 
-          // Set the Vertex Color
-          MeshToCreate.VertexColors[i] = manager->biomeList[indexBiome].vertexColors[randomVertexColor];
-        }
-        else if (ZPos >= manager->biomeList[indexBiome].minHeight) {
-          if (ZPos < manager->biomeList[indexBiome].maxHeight) {
+              // Select a random Color
+              int numberOfColors = TerrainGenerator->biomeList[indexBiome].vertexColors.Num() - 1;
+              int randomVertexColor = FMath::RandRange(0, numberOfColors);
 
-            // Select a random Color
-            int numberOfColors = manager->biomeList[indexBiome].vertexColors.Num() - 1;
-            int randomVertexColor = FMath::RandRange(0, numberOfColors);
-
-            // Set the Vertex Color
-            MeshToCreate.VertexColors[i] = manager->biomeList[indexBiome].vertexColors[randomVertexColor];
+              // Set the Vertex Color
+              MeshToCreate.VertexColors[i] = TerrainGenerator->biomeList[indexBiome].vertexColors[randomVertexColor];
+            }
           }
+          ++i;
         }
       }
     }
+
+    if (TerrainGenerator->useHeightMap == true) {
+      // Calculate the Height Map
+      for (int indexBiome = 0; indexBiome < TerrainGenerator->biomeList.Num(); indexBiome++)
+      {
+        FBiomeSettings lowerBiome;
+
+        // Vertices
+        int i = 0;
+        for (auto Elem : ZPositions) {
+          // Get Perlin Value
+          float ZPos = Elem.Value / TerrainGenerator->maxHeight;
+
+          float clamped = ZPos * 255;
+          if (clamped < 0.0f) {
+            clamped = 0.0f;
+          }
+
+          // Set the Vertex Color
+          MeshToCreate.VertexColors[i] = FColor(clamped, clamped, clamped);
+          ++i;
+        }
+      }
+    }
+  }
+}
+
+void ATG_Tile::SetupAssets(FTileSettings tSettings) {
+  if (TerrainGenerator) {
+    UE_LOG(LogTile, Log, TEXT("TILE[%d] Setup Assets"), TileID);
+    if (TerrainGenerator->spawnAssets) {
+      // Set Seed of this tile for the randome trees
+      FMath::RandInit(TileSeed);
+
+      // For each Biome
+      for (int indexBiome = 0; indexBiome < TerrainGenerator->biomeList.Num(); indexBiome++)
+      {
+        // If exist some type of asset
+        if (TerrainGenerator->biomeList[indexBiome].asset.mesh != nullptr) {
+
+          //Set the Mesh to the Instance
+          InstancedList[indexBiome]->SetStaticMesh(TerrainGenerator->biomeList[indexBiome].asset.mesh);
+
+          // Vertices
+          for (auto Elem : ZPositions) {
+            // Get Perlin Value
+            float ZPos = Elem.Value / TerrainGenerator->maxHeight;
+
+            // Clamp
+            if (ZPos < 0.0f) { ZPos = 0.0f; }
+            else if (ZPos >= 1.0f) { ZPos = 1.f; }
+
+            // Set the VertexColor depend the Height
+            if (ZPos >= TerrainGenerator->biomeList[indexBiome].minHeight) {
+              if (ZPos <= TerrainGenerator->biomeList[indexBiome].maxHeight) {
+                // Get the asset Settings
+                FAssetSettings asset = TerrainGenerator->biomeList[indexBiome].asset;
+
+                // Get Perlin Noise from Assets value
+                float randomAsset = FMath::RandRange(0.0f, 1.f);
+
+                // If exist asset here
+                if (randomAsset <= asset.probability) {
+                  FVector thisTrans = this->GetActorLocation();
+                  float posX = TileX * tSettings.getTileSize();
+                  float posY = TileY * tSettings.getTileSize();
+                  FVector2D localPos = Elem.Key * tSettings.getLOD();
+
+                  // Asset Position
+                  FVector assetLocation(localPos.X, localPos.Y, Elem.Value);
+
+                  // Asset Scale
+                  FVector assetScale = FVector(1.f, 1.f, 1.f);
+                  if (asset.randomScale) {
+                    assetScale.X = FMath::FRandRange(1.f, asset.maxRandomScale.X);
+                    assetScale.Y = FMath::FRandRange(1.f, asset.maxRandomScale.Y);
+                    assetScale.Z = FMath::FRandRange(1.f, asset.maxRandomScale.Z);
+                  }
+
+                  // Asset Rotation
+                  FRotator assetRotation = FRotator::ZeroRotator;
+                  if (asset.randomRotation) {
+                    assetRotation.Pitch = FMath::FRandRange(0.f, 360.f);
+                    assetRotation.Roll = FMath::FRandRange(0.f, 360.f);
+                    assetRotation.Yaw = FMath::FRandRange(0.f, 360.f);
+                  }
+
+                  // Asset Collision
+                  if (!asset.collision) {
+                    InstancedList[indexBiome]->BodyInstance.SetCollisionEnabled(ECollisionEnabled::NoCollision);
+                  }
+
+                  //Add the asset to the Instanced Object
+                  InstancedList[indexBiome]->AddInstance(FTransform(assetRotation, assetLocation, assetScale));
+                }
+              } // biome max height
+            } // biome min height
+          } //end for each vertex
+        } //end if existAsset
+      } //end for biome list
+    } //end if spawnAssets
   }
 }
 
@@ -312,15 +467,28 @@ float ATG_Tile::ScaleZWithHeightRange(double value) {
 
 int ATG_Tile::GetValueIndexForCoordinates(int x, int y)
 {
-  return x + y * tileSettings.getArrayLineSize();
+  return x + (y * tileSettings.getArrayLineSize());
+}
+
+FVector2D ATG_Tile::GetCoordsWithIndex(int index)
+{
+  int y = index % tileSettings.ArrayLineSize;
+  int x = index / tileSettings.ArrayLineSize;
+
+  return FVector2D(x, y);
+}
+
+FVector2D ATG_Tile::CalculateWorldPosition(float x, float y) {
+  double worldX = (TileX * tileSettings.getTileSize() + x);
+  double worldY = (TileY * tileSettings.getTileSize() + y);
+  return FVector2D(worldX, worldY);
 }
 
 double ATG_Tile::GetNoiseValueForGridCoordinates(double x, double y)
-{
-  double worldX = (TileX * tileSettings.getTileSize() + x);
-  double worldY = (TileY * tileSettings.getTileSize() + y);
-   
-  return TerrainGenerator->GetAlgorithmValue(worldX, worldY);
+{   
+  FVector2D world = CalculateWorldPosition(x, y);
+
+  return TerrainGenerator->GetAlgorithmValue(world.X, world.Y);
 }
 
 void ATG_Tile::SetTileWorldPosition(int coordX, int coordY, FTileSettings tSettings)
@@ -338,9 +506,15 @@ void ATG_Tile::SetTileWorldPosition(int coordX, int coordY, FTileSettings tSetti
 }
 
 void ATG_Tile::InitTerrainPosition() {
-	// Position of the Terrain
-	FVector position = FVector(tileSettings.getTileSize() / 2, tileSettings.getTileSize() / 2, 0.f);
+  FVector position = FVector(tileSettings.getTileSize() / 2, tileSettings.getTileSize() / 2, 0.f);
+
+  // Position of the Terrain
 	RuntimeMesh->SetRelativeLocation(position * -1);
+
+  // Position of the Instanced Asset
+  for (int i = 0; i < InstancedList.Num(); ++i) {
+    InstancedList[i]->SetRelativeLocation(position * -1);
+  }  
 }
 
 void ATG_Tile::SetVisibile(bool option)
@@ -352,6 +526,14 @@ void ATG_Tile::SetVisibile(bool option)
 
   // Show or Hide The Water
   waterComponent->SetVisibility(option, true);
+}
+
+void ATG_Tile::SetVisibileAsset(bool option)
+{
+  // Show or Hide the Assets
+  for (int i = 0; i < InstancedList.Num(); ++i) {
+    InstancedList[i]->SetVisibility(option, true);
+  }
 }
 
 void ATG_Tile::setTileName(FName text) {

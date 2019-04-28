@@ -12,21 +12,10 @@ public:
 
   void setNoiseSeed(const int32& newSeed);
 
-  double noise(double x);
-  double noise(double x, double y);
-  double noise(double x, double y, double z);
-
-  double octaveNoise(double x, int32 octaves);
-  double octaveNoise(double x, double y, int32 octaves);
-  double octaveNoise(double x, double y, double z, int32 octaves);
-
-  double noise0_1(double x);
-  double noise0_1(double x, double y);
-  double noise0_1(double x, double y, double z);
-
-  double octaveNoise0_1(double x, int32 octaves);
-  double octaveNoise0_1(double x, double y, int32 octaves);
-  double octaveNoise0_1(double x, double y, double z, int32 octaves);
+  double noise(double x = 0.0, double y = 0.0, double z = 0.0);
+  double noise0_1(double x = 0.0, double y = 0.0, double z = 0.0);
+  double octaveNoise(double x = 0.0, double y = 0.0, double z = 0.0, int32 octaves = 1);
+  double octaveNoise0_1(double x = 0.0, double y = 0.0, double z = 0.0, int32 octaves = 1);
 
 private:
   TArray<int32> perm;

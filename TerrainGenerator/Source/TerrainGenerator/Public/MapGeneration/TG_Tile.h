@@ -4,6 +4,7 @@
 
 #include "TG_TileSettings.h"
 #include "TG_MeshSettings.h"
+#include "TG_AssetSettings.h"
 #include "RuntimeMeshComponent.h"
 
 #include "CoreMinimal.h"
@@ -21,12 +22,13 @@ class TERRAINGENERATOR_API ATG_Tile : public AActor
 	
 public:
   ATG_Tile();
-	virtual void BeginPlay() override;
 
   UFUNCTION()
     void Init(int tileID, int coordX, int coordY, FTileSettings tSettings, ATG_TerrainGenerator* manager);
   UFUNCTION()
     void Update(int coordX, int coordY);
+  UFUNCTION()
+    bool DestroyTile();
 
   /* GETTER */
   UFUNCTION()
@@ -40,6 +42,10 @@ public:
   UFUNCTION()
     int GetValueIndexForCoordinates(int x, int y);
   UFUNCTION()
+    FVector2D GetCoordsWithIndex(int index);
+  UFUNCTION()
+    FVector2D CalculateWorldPosition(float x, float y);
+  UFUNCTION()
     double GetNoiseValueForGridCoordinates(double x, double y);
 
 
@@ -48,6 +54,8 @@ public:
     void SetTileWorldPosition(int coordX, int coordY, FTileSettings tSettings);
   UFUNCTION()
     void SetVisibile(bool option);
+  UFUNCTION()
+    void SetVisibileAsset(bool option);
 
  
   /*
@@ -66,12 +74,17 @@ public:
     int TileX = 0;
   UPROPERTY(VisibleAnywhere, BlueprintReadWrite, Category = "Tile")
     int TileY = 0;
+  UPROPERTY(VisibleAnywhere, BlueprintReadWrite, Category = "Tile")
+    float maxDistanceForAssets = 0.f;
 
   UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Tile")
     URuntimeMeshComponent* RuntimeMesh;
 
   UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Tile")
     UStaticMeshComponent* waterComponent;
+
+  UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Tile")
+    TArray<UInstancedStaticMeshComponent*> InstancedList;
 
 protected:
   /* Initialize all the Mesh values to DEFAULT value */
@@ -96,11 +109,15 @@ protected:
 
   /* Setup the Water settings*/
   UFUNCTION()
-    void SetupWater(FTileSettings tSettings, ATG_TerrainGenerator* manager);
+    void SetupWater(FTileSettings tSettings);
 
   /* Setup the Biomes settings*/
   UFUNCTION()
-    void SetupBiomes(FTileSettings tSettings, ATG_TerrainGenerator* manager);
+    void SetupBiomes(FTileSettings tSettings);
+
+  /* Setup the Biomes settings*/
+  UFUNCTION()
+    void SetupAssets(FTileSettings tSettings);
 
   /* Set the Terrain Position on the middle the Tile */
   UFUNCTION()
@@ -110,7 +127,7 @@ protected:
     void setTileName(FName text);
 
   // Perlin Value Array
-  TArray<double> ZPositions;
+  TMap<FVector2D, double> ZPositions;
 
 private:
   UPROPERTY()
@@ -121,5 +138,4 @@ private:
 
   UPROPERTY()
     FMeshSettings MeshToCreate;
-	
 };

@@ -2,6 +2,8 @@
 
 #pragma once
 
+#include "TG_AssetSettings.h"
+
 #include "TG_BiomeSettings.generated.h"
 
 USTRUCT(BlueprintType)
@@ -17,7 +19,7 @@ struct FBiomeSettings {
     float maxHeight = 0.f;
 
   UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "BiomeSettings")
-    TSubclassOf<AActor> assets;
+    FAssetSettings asset;
 
   UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "BiomeSettings")
     TArray<FColor> vertexColors;
